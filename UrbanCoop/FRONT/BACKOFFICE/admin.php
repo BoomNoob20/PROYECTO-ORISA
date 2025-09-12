@@ -188,7 +188,7 @@ function formatDateSimple($date) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Urban Coop</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="FRONT/CSS/adminStyles.css">
+    <link rel="stylesheet" href="../CSS/adminStyles.css">
 </head>
 <body>
     <div class="layout">
@@ -631,7 +631,7 @@ ON DUPLICATE KEY UPDATE usr_name = VALUES(usr_name);
         }
         
         // Redirigir al perfil
-        window.location.href = 'perfil.php';
+        window.location.href = '../perfil.php';
     }
     </script>
     

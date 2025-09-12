@@ -274,4 +274,6 @@ if (end($path_parts) == 'register' && $request_method == 'POST') {
     http_response_code(404);
     echo json_encode(array("success" => false, "message" => "Endpoint no encontrado"));
 }
+
+
 ?>

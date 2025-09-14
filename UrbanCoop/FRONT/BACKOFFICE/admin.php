@@ -1,6 +1,17 @@
 <?php
 session_start();
 
+// Verificación de autenticación del lado del servidor
+function checkAdminAuth() {
+    if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || $_SESSION['is_admin'] != 1) {
+        header('Location: loginLP.php');
+        exit();
+    }
+}
+
+// Verificar autenticación antes de cualquier procesamiento
+checkAdminAuth();
+
 // Configuración de la base de datos con múltiples opciones
 $db_configs = [
     // Configuración principal
@@ -53,67 +64,142 @@ if (!$pdo) {
     $connection_error = "No se pudo conectar a la base de datos MySQL. Revisa la configuración.";
 }
 
+// Función para validar entrada numérica
+function validateId($id) {
+    return filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+}
+
+// Función para registrar acciones del admin
+function logAdminAction($pdo, $admin_id, $action, $details) {
+    try {
+        $stmt = $pdo->prepare("INSERT INTO admin_logs (admin_id, action, details, timestamp) VALUES (?, ?, ?, NOW())");
+        $stmt->execute([$admin_id, $action, $details]);
+    } catch (Exception $e) {
+        error_log("Error logging admin action: " . $e->getMessage());
+    }
+}
+
 // Procesar acciones AJAX
 if (isset($_POST['action']) && $pdo) {
+    // Verificar token CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Token de seguridad inválido']);
+        exit;
+    }
+    
     $response = ['success' => false, 'message' => ''];
     
     try {
         switch ($_POST['action']) {
             case 'approve_user':
-                $user_id = (int)$_POST['user_id'];
-                $stmt = $pdo->prepare("UPDATE usuario SET estado = 2 WHERE id = ?");
-                if ($stmt->execute([$user_id])) {
+                $user_id = validateId($_POST['user_id']);
+                if (!$user_id) {
+                    throw new Exception('ID de usuario inválido');
+                }
+                
+                $stmt = $pdo->prepare("UPDATE usuario SET estado = 2 WHERE id = ? AND estado = 1");
+                $affected = $stmt->execute([$user_id]);
+                
+                if ($stmt->rowCount() > 0) {
+                    logAdminAction($pdo, $_SESSION['user_id'], 'approve_user', "Aprobó usuario ID: $user_id");
                     $response = ['success' => true, 'message' => 'Usuario aprobado correctamente'];
+                } else {
+                    throw new Exception('Usuario no encontrado o ya procesado');
                 }
                 break;
             
             case 'reject_user':
-                $user_id = (int)$_POST['user_id'];
-                $stmt = $pdo->prepare("UPDATE usuario SET estado = 3 WHERE id = ?");
-                if ($stmt->execute([$user_id])) {
+                $user_id = validateId($_POST['user_id']);
+                if (!$user_id) {
+                    throw new Exception('ID de usuario inválido');
+                }
+                
+                $stmt = $pdo->prepare("UPDATE usuario SET estado = 3 WHERE id = ? AND estado = 1");
+                if ($stmt->execute([$user_id]) && $stmt->rowCount() > 0) {
+                    logAdminAction($pdo, $_SESSION['user_id'], 'reject_user', "Rechazó usuario ID: $user_id");
                     $response = ['success' => true, 'message' => 'Usuario rechazado correctamente'];
+                } else {
+                    throw new Exception('Usuario no encontrado o ya procesado');
                 }
                 break;
             
             case 'approve_payment':
-                $payment_id = (int)$_POST['payment_id'];
-                $stmt = $pdo->prepare("UPDATE comprobantes_pago SET status = 'aprobado' WHERE id = ?");
-                if ($stmt->execute([$payment_id])) {
+                $payment_id = validateId($_POST['payment_id']);
+                if (!$payment_id) {
+                    throw new Exception('ID de pago inválido');
+                }
+                
+                $stmt = $pdo->prepare("UPDATE comprobantes_pago SET status = 'aprobado' WHERE id = ? AND status = 'pendiente'");
+                if ($stmt->execute([$payment_id]) && $stmt->rowCount() > 0) {
+                    logAdminAction($pdo, $_SESSION['user_id'], 'approve_payment', "Aprobó comprobante ID: $payment_id");
                     $response = ['success' => true, 'message' => 'Comprobante aprobado correctamente'];
+                } else {
+                    throw new Exception('Comprobante no encontrado o ya procesado');
                 }
                 break;
             
             case 'reject_payment':
-                $payment_id = (int)$_POST['payment_id'];
-                $stmt = $pdo->prepare("UPDATE comprobantes_pago SET status = 'rechazado' WHERE id = ?");
-                if ($stmt->execute([$payment_id])) {
+                $payment_id = validateId($_POST['payment_id']);
+                if (!$payment_id) {
+                    throw new Exception('ID de pago inválido');
+                }
+                
+                $stmt = $pdo->prepare("UPDATE comprobantes_pago SET status = 'rechazado' WHERE id = ? AND status = 'pendiente'");
+                if ($stmt->execute([$payment_id]) && $stmt->rowCount() > 0) {
+                    logAdminAction($pdo, $_SESSION['user_id'], 'reject_payment', "Rechazó comprobante ID: $payment_id");
                     $response = ['success' => true, 'message' => 'Comprobante rechazado correctamente'];
+                } else {
+                    throw new Exception('Comprobante no encontrado o ya procesado');
                 }
                 break;
             
             case 'approve_hours':
-                $hours_id = (int)$_POST['hours_id'];
-                $stmt = $pdo->prepare("UPDATE horas_trabajadas SET description = CONCAT(description, ' [APROBADO]') WHERE id = ? AND description NOT LIKE '%[APROBADO]%'");
-                if ($stmt->execute([$hours_id])) {
+                $hours_id = validateId($_POST['hours_id']);
+                if (!$hours_id) {
+                    throw new Exception('ID de horas inválido');
+                }
+                
+                $stmt = $pdo->prepare("UPDATE horas_trabajadas SET description = CONCAT(description, ' [APROBADO]') WHERE id = ? AND description NOT LIKE '%[APROBADO]%' AND description NOT LIKE '%[RECHAZADO]%'");
+                if ($stmt->execute([$hours_id]) && $stmt->rowCount() > 0) {
+                    logAdminAction($pdo, $_SESSION['user_id'], 'approve_hours', "Aprobó horas ID: $hours_id");
                     $response = ['success' => true, 'message' => 'Horas aprobadas correctamente'];
+                } else {
+                    throw new Exception('Registro no encontrado o ya procesado');
                 }
                 break;
             
             case 'reject_hours':
-                $hours_id = (int)$_POST['hours_id'];
-                $stmt = $pdo->prepare("UPDATE horas_trabajadas SET description = CONCAT(description, ' [RECHAZADO]') WHERE id = ? AND description NOT LIKE '%[RECHAZADO]%'");
-                if ($stmt->execute([$hours_id])) {
+                $hours_id = validateId($_POST['hours_id']);
+                if (!$hours_id) {
+                    throw new Exception('ID de horas inválido');
+                }
+                
+                $stmt = $pdo->prepare("UPDATE horas_trabajadas SET description = CONCAT(description, ' [RECHAZADO]') WHERE id = ? AND description NOT LIKE '%[APROBADO]%' AND description NOT LIKE '%[RECHAZADO]%'");
+                if ($stmt->execute([$hours_id]) && $stmt->rowCount() > 0) {
+                    logAdminAction($pdo, $_SESSION['user_id'], 'reject_hours', "Rechazó horas ID: $hours_id");
                     $response = ['success' => true, 'message' => 'Horas rechazadas correctamente'];
+                } else {
+                    throw new Exception('Registro no encontrado o ya procesado');
                 }
                 break;
+            
+            default:
+                throw new Exception('Acción no válida');
         }
     } catch (Exception $e) {
         $response = ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+        error_log("Admin panel error: " . $e->getMessage());
     }
     
     header('Content-Type: application/json');
     echo json_encode($response);
     exit;
+}
+
+// Generar token CSRF
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 // Inicializar variables
@@ -122,10 +208,22 @@ $pending_payments = [];
 $pending_hours = [];
 $all_users = [];
 $error_message = '';
+$admin_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] . ' ' . $_SESSION['user_surname'] : 'Admin';
 
 // Solo obtener datos si hay conexión a la base de datos
 if ($pdo) {
     try {
+        // Crear tabla de logs si no existe
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admin_id INT NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_admin_id (admin_id),
+            INDEX idx_timestamp (timestamp)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
         // Obtener usuarios pendientes (estado = 1) usando la tabla usuario
         $pending_users = $pdo->query("
             SELECT id, usr_name as nombre, usr_surname as apellido, usr_email as email, 
@@ -163,6 +261,7 @@ if ($pdo) {
         
     } catch (Exception $e) {
         $error_message = "Error al obtener datos: " . $e->getMessage();
+        error_log($error_message);
     }
 } else {
     $error_message = $connection_error;
@@ -179,6 +278,11 @@ function formatDateSimple($date) {
     if (!$date) return 'No especificado';
     return date('d/m/Y', strtotime($date));
 }
+
+// Función para escapar HTML
+function h($string) {
+    return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+}
 ?>
 
 <!DOCTYPE html>
@@ -188,7 +292,8 @@ function formatDateSimple($date) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Urban Coop</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="FRONT/CSS/adminStyles.css">
+    <link rel="stylesheet" href="CSS/adminStyles.css">
+    <script src="JSS/admin.js" defer></script>
 </head>
 <body>
     <div class="layout">
@@ -252,7 +357,10 @@ function formatDateSimple($date) {
                 <div class="header-actions">
                     <div class="user-menu">
                         <i class="fas fa-user-circle"></i>
-                        <span>Admin</span>  
+                        <span><?= h($admin_name) ?></span>
+                        <button class="logout-btn" onclick="logout()">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
                     </div>
                 </div>
             </header>
@@ -265,7 +373,7 @@ function formatDateSimple($date) {
                 <?php if ($error_message): ?>
                     <div class="alert alert-warning" style="display: block;">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <?= htmlspecialchars($error_message) ?>
+                        <?= h($error_message) ?>
                     </div>
                 <?php endif; ?>
 
@@ -280,81 +388,7 @@ function formatDateSimple($date) {
                         </button>
                     </div>
 
-                    <!-- Database Setup Section -->
-                    <div class="section" id="setup-section">
-                        <div class="db-setup">
-                            <h3><i class="fas fa-database"></i> Configuración de Base de Datos</h3>
-                            
-                            <div class="setup-step">
-                                <h4>Ejecuta este SQL en tu base de datos MySQL:</h4>
-                                <div class="code-block">
--- Crear base de datos
-CREATE DATABASE IF NOT EXISTS usuarios_urban_coop 
-CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE usuarios_urban_coop;
-
--- Crear tabla usuario
-CREATE TABLE IF NOT EXISTS usuario (
-    id INT(11) NOT NULL AUTO_INCREMENT,
-    usr_name VARCHAR(100) NOT NULL COMMENT 'Nombre del usuario',
-    usr_surname VARCHAR(100) NOT NULL COMMENT 'Apellido del usuario', 
-    usr_email VARCHAR(100) NOT NULL COMMENT 'Email del usuario',
-    usr_pass VARCHAR(100) NOT NULL COMMENT 'Contraseña',
-    usr_ci INT(11) NOT NULL COMMENT 'Cédula de identidad',
-    usr_phone INT(11) NOT NULL COMMENT 'Teléfono',
-    is_admin INT(11) NOT NULL DEFAULT 0 COMMENT '0=Usuario normal, 1=Administrador',
-    estado INT(11) NOT NULL DEFAULT 1 COMMENT '1=Pendiente, 2=Aprobado, 3=Rechazado',
-    PRIMARY KEY (id),
-    UNIQUE KEY usr_email (usr_email),
-    UNIQUE KEY usr_ci (usr_ci),
-    INDEX idx_estado (estado),
-    INDEX idx_admin (is_admin)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Crear tabla horas trabajadas
-CREATE TABLE IF NOT EXISTS horas_trabajadas (
-    id INT NOT NULL AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    work_date DATE NOT NULL,
-    hours_worked DECIMAL(4,2) NOT NULL,
-    description TEXT NOT NULL,
-    work_type VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_user_date (user_id, work_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Crear tabla comprobantes de pago  
-CREATE TABLE IF NOT EXISTS comprobantes_pago (
-    id INT NOT NULL AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    payment_month VARCHAR(2) NOT NULL,
-    payment_year VARCHAR(4) NOT NULL,
-    file_name VARCHAR(255) NOT NULL,
-    file_path VARCHAR(500) NOT NULL,
-    file_size INT NOT NULL,
-    file_type VARCHAR(50) NOT NULL,
-    description TEXT,
-    status ENUM('pendiente', 'aprobado', 'rechazado') DEFAULT 'pendiente',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_user_month_year (user_id, payment_month, payment_year)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Insertar usuarios de ejemplo
-INSERT INTO usuario(usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado) VALUES 
-('Pedro','Garfhone','usuario@gmail.com','123456',24966853,93658842,0,1),
-('Admin','Istrador','admin@gmail.com','admin123',12345678,99999999,1,2)
-ON DUPLICATE KEY UPDATE usr_name = VALUES(usr_name);
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                <?php else: ?>
+                    
                     <!-- Debug Section -->
                     <div class="section" id="debug-section">
                         <div class="debug-info">

@@ -1,7 +1,10 @@
 <?php
-// perfil.php - Versión frontend con redirección a FRONT/
-
+// perfil.php - Versión corregida
 session_start();
+
+// Configuración de errores para depuración
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 // Configuración de base de datos para validación básica
 $host = 'localhost';
@@ -539,48 +542,117 @@ if (is_array($current_user)) {
     let isUserDataLoaded = false;
     const API_BASE = 'API_cooperativa.php';
 
-    // Función principal de inicialización
+    // FUNCIÓN DE VALIDACIÓN DE SESIÓN (CORREGIDA)
+    function isSessionValid() {
+        const userData = localStorage.getItem('user_data');
+        const loginTime = localStorage.getItem('login_time');
+        
+        console.log('Validando sesión...');
+        console.log('userData:', userData);
+        console.log('loginTime:', loginTime);
+        
+        if (!userData || !loginTime) {
+            console.log('No hay datos de sesión');
+            return false;
+        }
+        
+        try {
+            const user = JSON.parse(userData);
+            const now = new Date().getTime();
+            const login = parseInt(loginTime);
+            
+            if (!user.id || !user.email) {
+                console.log('Datos de usuario incompletos');
+                return false;
+            }
+            
+            // Verificar que no hayan pasado más de 24 horas
+            const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 horas
+            if (now - login > SESSION_TIMEOUT) {
+                console.log('Sesión expirada');
+                localStorage.removeItem('user_data');
+                localStorage.removeItem('login_time');
+                return false;
+            }
+            
+            console.log('Sesión válida');
+            return true;
+        } catch (e) {
+            console.error('Error validating session:', e);
+            localStorage.removeItem('user_data');
+            localStorage.removeItem('login_time');
+            return false;
+        }
+    }
+
+    function getCurrentUser() {
+        if (!isSessionValid()) {
+            return null;
+        }
+        
+        try {
+            const userData = localStorage.getItem('user_data');
+            return JSON.parse(userData);
+        } catch (e) {
+            console.error('Error getting current user:', e);
+            localStorage.removeItem('user_data');
+            localStorage.removeItem('login_time');
+            return null;
+        }
+    }
+
+    function clearSession() {
+        localStorage.removeItem('user_data');
+        localStorage.removeItem('login_time');
+        console.log('Sesión limpiada');
+    }
+
+    // FUNCIÓN PRINCIPAL DE INICIALIZACIÓN (CORREGIDA)
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('Iniciando carga del perfil...');
+        console.log('=== PERFIL SESSION CHECK ===');
+        console.log('Current URL:', window.location.href);
         
-        // Verificar autenticación
-        const userData = sessionStorage.getItem('user_data');
-        
-        if (!userData) {
-            console.log('No hay datos de usuario en sessionStorage');
+        // Verificar si hay sesión válida
+        if (!isSessionValid()) {
+            console.log('No hay sesión válida - redirigiendo al login');
             redirectToLogin('No hay sesión activa');
             return;
         }
 
-        try {
-            currentUser = JSON.parse(userData);
-            console.log('Usuario cargado:', currentUser);
-            
-            // Validar estructura de datos del usuario
-            if (!currentUser.id || !currentUser.email || !currentUser.estado) {
-                throw new Error('Datos de usuario incompletos');
-            }
-
-            // Verificar estado del usuario
-            if (currentUser.estado == 1) {
-                showAccessDenied('waiting', 'Cuenta en Espera', 'Esperando la aprobación manual de un administrador');
-                return;
-            } else if (currentUser.estado == 3) {
-                showAccessDenied('rejected', 'Cuenta Rechazada', 'Usuario rechazado. Contacte con el administrador.');
-                return;
-            } else if (currentUser.estado != 2) {
-                showAccessDenied('unknown', 'Estado Desconocido', 'Estado de usuario desconocido');
-                return;
-            }
-
-            // Usuario aprobado - inicializar aplicación
-            initializeApp();
-            
-        } catch (error) {
-            console.error('Error al procesar datos de usuario:', error);
-            sessionStorage.clear();
+        // Obtener usuario de localStorage
+        currentUser = getCurrentUser();
+        
+        if (!currentUser) {
+            console.log('Error obteniendo datos del usuario');
             redirectToLogin('Error en los datos de sesión');
+            return;
         }
+        
+        console.log('Usuario cargado:', currentUser);
+        
+        // Validar estructura de datos del usuario
+        if (!currentUser.id || !currentUser.email || currentUser.estado === undefined) {
+            console.error('Datos de usuario incompletos:', currentUser);
+            clearSession();
+            redirectToLogin('Datos de usuario incompletos');
+            return;
+        }
+
+        // Verificar estado del usuario
+        if (currentUser.estado == 1) {
+            showAccessDenied('waiting', 'Cuenta en Espera', 'Esperando la aprobación manual de un administrador');
+            return;
+        } else if (currentUser.estado == 3) {
+            showAccessDenied('rejected', 'Cuenta Rechazada', 'Usuario rechazado. Contacte con el administrador.');
+            return;
+        } else if (currentUser.estado != 2) {
+            showAccessDenied('unknown', 'Estado Desconocido', 'Estado de usuario desconocido');
+            return;
+        }
+
+        // Usuario aprobado - inicializar aplicación
+        console.log('Inicializando aplicación para usuario aprobado');
+        initializeApp();
     });
 
     // Funciones de inicialización
@@ -606,7 +678,7 @@ if (is_array($current_user)) {
     }
 
     function initializeApp() {
-        console.log('Inicializando aplicación para usuario:', currentUser.usr_name);
+        console.log('Inicializando aplicación para usuario:', currentUser.name || currentUser.usr_name);
         
         // Actualizar interfaz con datos del usuario
         updateUserInterface();
@@ -618,10 +690,6 @@ if (is_array($current_user)) {
         hideLoadingScreen();
         document.getElementById('mainApp').style.display = 'block';
         
-        // Inicializar componentes
-        updateTaskCount();
-        setupFormHandlers();
-        
         console.log('Aplicación inicializada correctamente');
         isUserDataLoaded = true;
     }
@@ -629,7 +697,10 @@ if (is_array($current_user)) {
     function updateUserInterface() {
         const userNameDisplay = document.getElementById('userNameDisplay');
         if (userNameDisplay) {
-            userNameDisplay.textContent = currentUser.usr_name + ' ' + currentUser.usr_surname;
+            // Compatibilidad con ambos formatos de nombres
+            const firstName = currentUser.name || currentUser.usr_name || 'Usuario';
+            const lastName = currentUser.surname || currentUser.usr_surname || '';
+            userNameDisplay.textContent = `${firstName} ${lastName}`.trim();
         }
         
         // Mostrar botón de admin si es administrador
@@ -648,7 +719,7 @@ if (is_array($current_user)) {
         if (hoursUserId) hoursUserId.value = currentUser.id;
     }
 
-    // Funciones API
+    // Funciones API (CORREGIDA)
     function loadUserData() {
         console.log('Cargando datos del usuario...');
         
@@ -661,13 +732,30 @@ if (is_array($current_user)) {
                 user_id: currentUser.id
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Verificar que la respuesta es JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('La respuesta no es JSON válido');
+            }
+            
+            return response.json();
+        })
         .then(data => {
+            console.log('Datos recibidos:', data);
+            
             if (data.success) {
                 console.log('Datos cargados exitosamente');
-                updatePaymentsList(data.payments);
-                updateHoursList(data.hours);
-                updateHoursMonth(data.total_hours_month, data.current_month);
+                updatePaymentsList(data.data.payments);
+                updateHoursList(data.data.hours);
+                updateHoursMonth(data.data.total_hours_month, data.data.current_month);
             } else {
                 console.error('Error al cargar datos:', data.message);
                 showMessage('paymentMessages', 'Error al cargar datos: ' + data.message, 'error');
@@ -675,7 +763,7 @@ if (is_array($current_user)) {
         })
         .catch(error => {
             console.error('Error de conexión:', error);
-            showMessage('paymentMessages', 'Error de conexión', 'error');
+            showMessage('paymentMessages', 'Error de conexión: ' + error.message, 'error');
         });
     }
 
@@ -852,7 +940,7 @@ if (is_array($current_user)) {
                     <div class="file-info-wrapper">
                         <div class="file-icon">${fileIcon}</div>
                         <div class="file-info">
-                            <h3>Comprobante ${payment.month_name} ${payment.year}</h3>
+                            <h3>Comprobante ${payment.month_name} ${payment.payment_year}</h3>
                             <p>Subido el ${payment.created_at} • ${payment.file_size}</p>
                             ${payment.description ? `<p style="font-style: italic; margin-top: 5px;">${payment.description}</p>` : ''}
                         </div>
@@ -926,18 +1014,6 @@ if (is_array($current_user)) {
         }
     }
 
-    function showMessage(containerId, message, type) {
-        const container = document.getElementById(containerId);
-        const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
-        
-        container.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
-        
-        // Auto-ocultar después de 5 segundos
-        setTimeout(() => {
-            container.innerHTML = '';
-        }, 5000);
-    }
-
     function hideLoadingScreen() {
         const loadingScreen = document.getElementById('loadingScreen');
         if (loadingScreen) {
@@ -953,8 +1029,42 @@ if (is_array($current_user)) {
             alert(message);
         }
         
-        sessionStorage.clear();
-        window.location.href = 'loginLP.php';
+        clearSession();
+        window.location.href = 'index.php';
+    }
+
+    function logout() {
+        if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
+            clearSession();
+            alert('Sesión cerrada exitosamente');
+            window.location.href = 'index.php';
+        }
+    }
+
+    function goToAdmin() {
+        if (currentUser && currentUser.is_admin == 1) {
+            window.location.href = 'BACKOFFICE/admin.php';
+        } else {
+            alert('No tienes permisos para acceder al panel de administración');
+        }
+    }
+
+    function openChat() {
+        alert('Función de chat en desarrollo');
+    }
+
+    function showMessage(containerId, message, type) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+        
+        container.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+        
+        // Auto-ocultar después de 5 segundos
+        setTimeout(() => {
+            container.innerHTML = '';
+        }, 5000);
     }
 
     // Funciones de navegación
@@ -1062,9 +1172,9 @@ if (is_array($current_user)) {
         if (myDayCount) myDayCount.textContent = remainingTasks;
         
         const menuItems = document.querySelectorAll('.menu-item .menu-item-count');
-        if (menuItems[1]) menuItems[1].textContent = favoriteTasks;
-        if (menuItems[2]) menuItems[2].textContent = totalTasks;
-        if (menuItems[3]) menuItems[3].textContent = casaTasks;
+        if (menuItems[0]) menuItems[0].textContent = favoriteTasks;
+        if (menuItems[1]) menuItems[1].textContent = totalTasks;
+        if (menuItems[2]) menuItems[2].textContent = casaTasks;
     }
 
     // Funciones de formularios
@@ -1120,31 +1230,11 @@ if (is_array($current_user)) {
         }
     }
 
-    // Funciones de utilidad
-    function logout() {
-        if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
-            sessionStorage.clear();
-            alert('Sesión cerrada exitosamente');
-            window.location.href = 'loginLP.php';
-        }
-    }
-
-    function goToAdmin() {
-        if (currentUser && currentUser.is_admin == 1) {
-            window.location.href = 'admin.php';
-        } else {
-            alert('No tienes permisos para acceder al panel de administración');
-        }
-    }
-
-    function openChat() {
-        alert('Función de chat en desarrollo');
-    }
-
     // Inicializar componentes después de cargar la app
     setTimeout(() => {
         if (isUserDataLoaded) {
             setupFormHandlers();
+            updateTaskCount();
         }
     }, 1000);
     </script>

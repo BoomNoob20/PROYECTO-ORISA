@@ -147,7 +147,7 @@ try {
             return array("success" => false, "message" => "Error al registrar usuario");
         }
 
-        // Login de usuario
+        // Login de usuario con soporte para MD5 legacy y password_hash nuevo
         public function login()
         {
             $query = "SELECT * FROM " . $this->table_name . " WHERE usr_email = ?";
@@ -160,9 +160,28 @@ try {
 
             if ($num > 0) {
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                $stored_password = $row['usr_pass'];
+                
+                $password_valid = false;
+                $needs_rehash = false;
 
-                // Verificar contraseña
-                if (password_verify($this->password, $row['usr_pass'])) {
+                // Primero intentar con password_verify (método nuevo y seguro)
+                if (password_verify($this->password, $stored_password)) {
+                    $password_valid = true;
+                    // La contraseña ya está en el formato nuevo, no necesita rehash
+                } 
+                // Si falla, intentar con MD5 (método legacy)
+                else if (strlen($stored_password) === 32 && md5($this->password) === $stored_password) {
+                    $password_valid = true;
+                    $needs_rehash = true; // Marcar para actualizar a password_hash
+                }
+
+                if ($password_valid) {
+                    // Si la contraseña necesita ser actualizada a password_hash
+                    if ($needs_rehash) {
+                        $this->updatePasswordHash($row['id'], $this->password);
+                    }
+                    
                     return array(
                         "success" => true,
                         "message" => "Login exitoso",
@@ -183,6 +202,21 @@ try {
             }
 
             return array("success" => false, "message" => "Usuario no encontrado");
+        }
+
+        // Método para actualizar contraseñas MD5 a password_hash
+        private function updatePasswordHash($user_id, $plain_password)
+        {
+            try {
+                $new_hash = password_hash($plain_password, PASSWORD_DEFAULT);
+                $query = "UPDATE " . $this->table_name . " SET usr_pass = ? WHERE id = ?";
+                $stmt = $this->conn->prepare($query);
+                $stmt->execute([$new_hash, $user_id]);
+                
+                error_log("Password actualizada para usuario ID: " . $user_id);
+            } catch (PDOException $e) {
+                error_log("Error actualizando password: " . $e->getMessage());
+            }
         }
 
         // Verificar si el email existe

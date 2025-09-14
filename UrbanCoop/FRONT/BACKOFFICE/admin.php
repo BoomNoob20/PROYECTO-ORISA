@@ -188,7 +188,7 @@ function formatDateSimple($date) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Urban Coop</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../CSS/adminStyles.css">
+    <link rel="stylesheet" href="FRONT/CSS/adminStyles.css">
 </head>
 <body>
     <div class="layout">
@@ -288,6 +288,68 @@ function formatDateSimple($date) {
                             <div class="setup-step">
                                 <h4>Ejecuta este SQL en tu base de datos MySQL:</h4>
                                 <div class="code-block">
+-- Crear base de datos
+CREATE DATABASE IF NOT EXISTS usuarios_urban_coop 
+CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+USE usuarios_urban_coop;
+
+-- Crear tabla usuario
+CREATE TABLE IF NOT EXISTS usuario (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    usr_name VARCHAR(100) NOT NULL COMMENT 'Nombre del usuario',
+    usr_surname VARCHAR(100) NOT NULL COMMENT 'Apellido del usuario', 
+    usr_email VARCHAR(100) NOT NULL COMMENT 'Email del usuario',
+    usr_pass VARCHAR(100) NOT NULL COMMENT 'Contraseña',
+    usr_ci INT(11) NOT NULL COMMENT 'Cédula de identidad',
+    usr_phone INT(11) NOT NULL COMMENT 'Teléfono',
+    is_admin INT(11) NOT NULL DEFAULT 0 COMMENT '0=Usuario normal, 1=Administrador',
+    estado INT(11) NOT NULL DEFAULT 1 COMMENT '1=Pendiente, 2=Aprobado, 3=Rechazado',
+    PRIMARY KEY (id),
+    UNIQUE KEY usr_email (usr_email),
+    UNIQUE KEY usr_ci (usr_ci),
+    INDEX idx_estado (estado),
+    INDEX idx_admin (is_admin)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Crear tabla horas trabajadas
+CREATE TABLE IF NOT EXISTS horas_trabajadas (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    work_date DATE NOT NULL,
+    hours_worked DECIMAL(4,2) NOT NULL,
+    description TEXT NOT NULL,
+    work_type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_date (user_id, work_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Crear tabla comprobantes de pago  
+CREATE TABLE IF NOT EXISTS comprobantes_pago (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    payment_month VARCHAR(2) NOT NULL,
+    payment_year VARCHAR(4) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INT NOT NULL,
+    file_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    status ENUM('pendiente', 'aprobado', 'rechazado') DEFAULT 'pendiente',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_month_year (user_id, payment_month, payment_year)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Insertar usuarios de ejemplo
+INSERT INTO usuario(usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado) VALUES 
+('Pedro','Garfhone','usuario@gmail.com','123456',24966853,93658842,0,1),
+('Admin','Istrador','admin@gmail.com','admin123',12345678,99999999,1,2)
+ON DUPLICATE KEY UPDATE usr_name = VALUES(usr_name);
                                 </div>
                             </div>
                         </div>
@@ -569,7 +631,7 @@ function formatDateSimple($date) {
         }
         
         // Redirigir al perfil
-        window.location.href = '../perfil.php';
+        window.location.href = 'perfil.php';
     }
     </script>
     

@@ -4,24 +4,9 @@
     box-sizing: border-box;
 }
 
-:root {
-    --primary-color: #d32f2f;
-    --primary-hover: #b71c1c;
-    --bg-color: #f5f5f5;
-    --text-color: #333;
-    --text-secondary: #666;
-    --border-color: #e0e0e0;
-    --card-bg: #ffffff;
-    --success-color: #4caf50;
-    --error-color: #f44336;
-    --warning-color: #ff9800;
-}
-
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: var(--bg-color);
-    color: var(--text-color);
-    line-height: 1.6;
+    background: #f5f5f5;
     height: 100vh;
     overflow: hidden;
 }
@@ -33,17 +18,16 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 280px;
-    background: var(--card-bg);
-    border-right: 1px solid var(--border-color);
+    width: 300px;
+    background: white;
+    border-right: 1px solid #e0e0e0;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
 }
 
 .sidebar-header {
     padding: 20px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid #e0e0e0;
 }
 
 .logo {
@@ -56,11 +40,11 @@ body {
 .logo-img {
     width: 110px;
     height: 110px;
-    object-fit: contain;
 }
 
 .logo-text {
     font-weight: bold;
+    color: #333;
     font-size: 18px;
 }
 
@@ -88,7 +72,6 @@ body {
 .menu-list {
     flex: 1;
     padding: 10px;
-    overflow-y: auto;
 }
 
 .menu-item {
@@ -113,8 +96,6 @@ body {
 .menu-item-icon {
     margin-right: 12px;
     font-size: 16px;
-    min-width: 20px;
-    text-align: center;
 }
 
 .menu-item-text {
@@ -139,17 +120,15 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
 }
 
 .header {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
     color: white;
-    padding: 15px 30px;
+    padding: 20px 40px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-shrink: 0;
 }
 
 .header-left {
@@ -159,7 +138,7 @@ body {
 }
 
 .header h1 {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 300;
 }
 
@@ -213,15 +192,6 @@ body {
     border-radius: 20px;
     cursor: pointer;
     font-size: 14px;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.profile-btn span {
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .profile-dropdown {
@@ -257,7 +227,7 @@ body {
 /* Content Area */
 .content-area {
     flex: 1;
-    padding: 20px 30px;
+    padding: 20px 40px;
     overflow-y: auto;
 }
 
@@ -267,25 +237,18 @@ body {
 
 .section.active {
     display: block;
-    animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
 }
 
 .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
-    flex-wrap: wrap;
-    gap: 15px;
+    margin-bottom: 30px;
 }
 
 .section-title {
-    font-size: 22px;
+    color: #333;
+    font-size: 24px;
     font-weight: 500;
 }
 
@@ -293,7 +256,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: var(--primary-color);
+    background: #d32f2f;
     border: none;
     color: white;
     padding: 10px 16px;
@@ -301,16 +264,15 @@ body {
     cursor: pointer;
     font-size: 14px;
     transition: background-color 0.2s;
-    white-space: nowrap;
 }
 
 .add-btn:hover {
-    background: var(--primary-hover);
+    background: #b71c1c;
 }
 
 /* Task Styles */
 .task-list {
-    max-width: 100%;
+    max-width: 600px;
 }
 
 .task-item {
@@ -318,7 +280,7 @@ body {
     align-items: center;
     gap: 12px;
     padding: 12px;
-    border: 1px solid var(--border-color);
+    border: 1px solid #e0e0e0;
     border-radius: 8px;
     margin-bottom: 8px;
     background: white;
@@ -341,6 +303,7 @@ body {
 .task-text {
     flex: 1;
     font-size: 14px;
+    color: #333;
 }
 
 .task-actions {
@@ -379,7 +342,7 @@ body {
 
 /* File List Styles */
 .file-list, .hours-list, .payroll-list {
-    max-width: 100%;
+    max-width: 800px;
 }
 
 .file-item, .hours-item, .payroll-item {
@@ -387,13 +350,11 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 15px;
-    border: 1px solid var(--border-color);
+    border: 1px solid #e0e0e0;
     border-radius: 8px;
     margin-bottom: 15px;
     background: white;
     transition: all 0.2s;
-    flex-wrap: wrap;
-    gap: 10px;
 }
 
 .file-item:hover, .hours-item:hover, .payroll-item:hover {
@@ -402,18 +363,18 @@ body {
 
 .file-info, .hours-info, .payroll-info {
     flex: 1;
-    min-width: 200px;
 }
 
 .file-info h3, .hours-info h3, .payroll-info h3 {
     margin: 0 0 8px 0;
     font-size: 16px;
+    color: #333;
     font-weight: 600;
 }
 
 .file-info p, .hours-info p, .payroll-info p {
     margin: 0 0 6px 0;
-    color: var(--text-secondary);
+    color: #666;
     font-size: 14px;
 }
 
@@ -423,7 +384,7 @@ body {
 }
 
 .action-btn {
-    background: var(--primary-color);
+    background: #d32f2f;
     color: white;
     border: none;
     padding: 8px 16px;
@@ -431,18 +392,17 @@ body {
     cursor: pointer;
     font-size: 13px;
     transition: background-color 0.2s;
-    white-space: nowrap;
 }
 
 .action-btn:hover {
-    background: var(--primary-hover);
+    background: #b71c1c;
 }
 
 /* Form Styles */
 .form-container {
-    max-width: 100%;
+    max-width: 600px;
     background: white;
-    border: 1px solid var(--border-color);
+    border: 1px solid #e0e0e0;
     border-radius: 8px;
     padding: 20px;
     margin-bottom: 20px;
@@ -457,6 +417,7 @@ body {
     display: block;
     margin-bottom: 6px;
     font-weight: 500;
+    color: #333;
 }
 
 .form-group input,
@@ -474,7 +435,7 @@ body {
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: var(--primary-color);
+    border-color: #d32f2f;
     box-shadow: 0 0 0 2px rgba(211, 47, 47, 0.1);
 }
 
@@ -482,16 +443,10 @@ body {
     display: flex;
     gap: 16px;
     margin-bottom: 16px;
-    flex-wrap: wrap;
-}
-
-.form-row .form-group {
-    flex: 1;
-    min-width: 200px;
 }
 
 .submit-btn {
-    background: var(--primary-color);
+    background: #d32f2f;
     color: white;
     border: none;
     padding: 12px 24px;
@@ -502,7 +457,7 @@ body {
 }
 
 .submit-btn:hover {
-    background: var(--primary-hover);
+    background: #b71c1c;
 }
 
 /* Upload Area */
@@ -518,7 +473,7 @@ body {
 }
 
 .upload-area:hover {
-    border-color: var(--primary-color);
+    border-color: #d32f2f;
     background-color: #fafafa;
 }
 
@@ -537,7 +492,7 @@ body {
 
 .upload-area p {
     margin: 0;
-    color: var(--text-secondary);
+    color: #666;
 }
 
 /* Alertas */
@@ -561,23 +516,6 @@ body {
     border: 1px solid #ef9a9a;
 }
 
-/* Validation Styles */
-.validation-error {
-    color: var(--error-color);
-    font-size: 12px;
-    margin-top: 5px;
-    display: block;
-}
-
-.input-error {
-    border-color: var(--error-color) !important;
-    box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.1) !important;
-}
-
-.input-success {
-    border-color: var(--success-color) !important;
-}
-
 /* Chat Button */
 .chat-btn {
     position: fixed;
@@ -585,7 +523,7 @@ body {
     right: 30px;
     width: 60px;
     height: 60px;
-    background: var(--primary-color);
+    background: #d32f2f;
     color: white;
     border: none;
     border-radius: 50%;
@@ -593,9 +531,6 @@ body {
     box-shadow: 0 4px 16px rgba(211, 47, 47, 0.3);
     transition: all 0.3s;
     z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .chat-btn:hover {
@@ -611,122 +546,10 @@ body {
 .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: var(--text-secondary);
+    color: #666;
 }
 
 .empty-state svg {
     margin-bottom: 20px;
     opacity: 0.5;
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-    .sidebar {
-        width: 240px;
-    }
-    
-    .header {
-        padding: 15px 20px;
-    }
-    
-    .content-area {
-        padding: 15px 20px;
-    }
-}
-
-@media (max-width: 768px) {
-    .container {
-        flex-direction: column;
-        height: auto;
-        min-height: 100vh;
-        overflow-y: auto;
-    }
-    
-    .sidebar {
-        width: 100%;
-        height: auto;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-    }
-    
-    .main-content {
-        height: auto;
-    }
-    
-    .header {
-        flex-direction: column;
-        gap: 15px;
-        padding: 15px;
-    }
-    
-    .header-left, .header-right {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .header-nav {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
-    .profile-btn {
-        max-width: none;
-    }
-    
-    .form-row {
-        flex-direction: column;
-        gap: 0;
-    }
-    
-    .form-row .form-group {
-        min-width: 100%;
-    }
-    
-    .file-item, .hours-item, .payroll-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
-    
-    .action-btn {
-        align-self: flex-end;
-    }
-}
-
-@media (max-width: 480px) {
-    .sidebar-header {
-        padding: 15px;
-    }
-    
-    .logo {
-        flex-direction: column;
-        text-align: center;
-        gap: 5px;
-    }
-    
-    .logo-img {
-        width: 80px;
-        height: 80px;
-    }
-    
-    .content-area {
-        padding: 15px;
-    }
-    
-    .section-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .add-btn {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .chat-btn {
-        bottom: 20px;
-        right: 20px;
-        width: 50px;
-        height: 50px;
-    }
 }

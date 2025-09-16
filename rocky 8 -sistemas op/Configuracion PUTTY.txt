@@ -1,0 +1,4 @@
+ip: 192.168.0.100
+puerto: 22
+usuario: admin
+contraseña: urbancoop

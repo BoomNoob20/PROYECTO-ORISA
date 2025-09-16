@@ -72,9 +72,10 @@ body {
 
 .logo img {
     width: 120px;
-    height: 60px;
+    height: auto;
     margin-right: 12px;
     border-radius: 6px;
+    object-fit: contain;
 }
 
 .nav-menu {

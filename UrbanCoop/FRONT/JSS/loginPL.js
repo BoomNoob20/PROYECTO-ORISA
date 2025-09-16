@@ -10,7 +10,7 @@ function toggleTheme() {
 
 themeToggle.addEventListener('click', toggleTheme);
 
-// * FUNCIÓN CRÍTICA: isSessionValid() - ESTABA FALTANDO *
+// FUNCIÓN MEJORADA: validación de sesión sin JWT
 function isSessionValid() {
     const userData = localStorage.getItem('user_data');
     const loginTime = localStorage.getItem('login_time');
@@ -29,33 +29,31 @@ function isSessionValid() {
             return false;
         }
         
-        // Opcional: verificar que no hayan pasado más de X horas (ej: 24 horas = 86400000 ms)
-        const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 horas
+        // Verificar tiempo de expiración (24 horas)
+        const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
         if (now - login > SESSION_TIMEOUT) {
-            // Limpiar sesión expirada
-            localStorage.removeItem('user_data');
-            localStorage.removeItem('login_time');
+            clearSession();
             return false;
         }
         
         return true;
     } catch (e) {
         console.error('Error validating session:', e);
-        // Limpiar datos corruptos
-        localStorage.removeItem('user_data');
-        localStorage.removeItem('login_time');
+        clearSession();
         return false;
     }
 }
 
-// * FUNCIÓN PARA LIMPIAR SESIÓN *
+// FUNCIÓN para limpiar sesión
 function clearSession() {
     localStorage.removeItem('user_data');
     localStorage.removeItem('login_time');
+    sessionStorage.removeItem('user_data');
+    sessionStorage.removeItem('login_time');
     console.log('Sesión limpiada');
 }
 
-// * FUNCIÓN PARA OBTENER DATOS DEL USUARIO *
+// FUNCIÓN para obtener datos del usuario actual
 function getCurrentUser() {
     if (!isSessionValid()) {
         return null;
@@ -71,7 +69,7 @@ function getCurrentUser() {
     }
 }
 
-// Message functions
+// Funciones de mensajes
 function showMessage(message, type) {
     const messageArea = document.getElementById('message-area');
     if (!messageArea) {
@@ -80,10 +78,8 @@ function showMessage(message, type) {
     }
     
     const messageClass = type === 'error' ? 'error-message' : 'success-message';
-    
     messageArea.innerHTML = `<div class="${messageClass}">${message}</div>`;
     
-    // Auto-hide after 5 seconds
     setTimeout(() => {
         messageArea.innerHTML = '';
     }, 5000);
@@ -105,26 +101,121 @@ function setButtonLoading(loading) {
     }
 }
 
+// FUNCIÓN MEJORADA para establecer sesión PHP (sin JWT)
+async function establishPhpSession(userData) {
+    const establishSessionUrl = getApiBaseUrl().replace('/API_Usuarios.php', '/establish_session.php');
+    
+    console.log('=== ESTABLISHING PHP SESSION ===');
+    console.log('URL:', establishSessionUrl);
+    
+    try {
+        const response = await fetch(establishSessionUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            body: JSON.stringify({
+                action: 'establish_session',
+                user_id: userData.id,
+                user_email: userData.email,
+                user_name: userData.name,
+                user_surname: userData.surname,
+                is_admin: userData.is_admin,
+                estado: userData.estado
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('Establish session result:', result);
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Failed to establish PHP session');
+        }
+        
+        console.log('✅ PHP session established successfully');
+        return result;
+        
+    } catch (error) {
+        console.error('❌ Error establishing PHP session:', error);
+        // No lanzar error aquí - permitir que el login continúe
+        console.warn('Continuando sin sesión PHP establecida');
+        return { success: false, message: error.message };
+    }
+}
+
 // Función para determinar la URL base correcta
 function getApiBaseUrl() {
-    // Obtener la URL actual de la página
     const currentLocation = window.location;
-    const protocol = currentLocation.protocol; // http: o https:
-    const hostname = currentLocation.hostname; // localhost o tu dominio
-    const port = currentLocation.port; // puerto si existe
+    const protocol = currentLocation.protocol;
+    const hostname = currentLocation.hostname;
+    const port = currentLocation.port;
     
-    // Construir la URL base
     let baseUrl = `${protocol}//${hostname}`;
     if (port && port !== '80' && port !== '443') {
         baseUrl += `:${port}`;
     }
     
-    // Agregar la ruta al API
     return `${baseUrl}/URBANCOOP/APIS/API_Usuarios.php`;
 }
 
-// Form functionality
-document.getElementById('loginForm')?.addEventListener('submit', function(e) {
+// FUNCIÓN SIMPLIFICADA para almacenar sesión (sin JWT)
+function storeUserSession(userData) {
+    const sessionData = {
+        id: userData.id,
+        name: userData.name || userData.usr_name,
+        surname: userData.surname || userData.usr_surname,
+        email: userData.email || userData.usr_email,
+        phone: userData.phone || userData.usr_phone,
+        ci: userData.ci || userData.usr_ci,
+        is_admin: parseInt(userData.is_admin) || 0,
+        estado: userData.estado
+    };
+    
+    const loginTime = new Date().getTime().toString();
+    
+    // Almacenar en ambos storages para compatibilidad
+    localStorage.setItem('user_data', JSON.stringify(sessionData));
+    localStorage.setItem('login_time', loginTime);
+    sessionStorage.setItem('user_data', JSON.stringify(sessionData));
+    sessionStorage.setItem('login_time', loginTime);
+    
+    console.log('=== SESSION STORED ===');
+    console.log('User data:', sessionData);
+    console.log('Is Admin:', sessionData.is_admin, typeof sessionData.is_admin);
+    console.log('=====================');
+    
+    return sessionData;
+}
+
+// FUNCIÓN MEJORADA para redirección
+function redirectUser(user) {
+    console.log('=== REDIRECTION LOGIC ===');
+    console.log('User is_admin value:', user.is_admin);
+    console.log('Type of is_admin:', typeof user.is_admin);
+    
+    // Verificación robusta del rol de admin
+    const isAdmin = user.is_admin === 1 || user.is_admin === '1' || user.is_admin == 1;
+    
+    console.log('Is admin check result:', isAdmin);
+    
+    if (isAdmin) {
+        console.log('✅ Redirecting to admin panel');
+        window.location.href = 'BACKOFFICE/admin.php';
+    } else {
+        console.log('✅ Redirecting to user profile');
+        window.location.href = 'perfil.php';
+    }
+    console.log('========================');
+}
+
+// MANEJO DEL FORMULARIO DE LOGIN (MEJORADO)
+document.getElementById('loginForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const form = e.target;
@@ -147,7 +238,6 @@ document.getElementById('loginForm')?.addEventListener('submit', function(e) {
         return;
     }
     
-    // Mostrar estado de carga
     setButtonLoading(true);
     
     const data = {
@@ -155,106 +245,86 @@ document.getElementById('loginForm')?.addEventListener('submit', function(e) {
         password: password
     };
     
-    // Obtener la URL del API dinámicamente
     const apiUrl = `${getApiBaseUrl()}?action=login`;
     
     console.log('=== API REQUEST DEBUG ===');
     console.log('API URL:', apiUrl);
     console.log('Enviando datos:', data);
-    console.log('Current location:', window.location.href);
     console.log('========================');
     
-    fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => {
-        console.log('=== API RESPONSE DEBUG ===');
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            body: JSON.stringify(data)
+        });
+        
         console.log('Response status:', response.status);
-        console.log('Response statusText:', response.statusText);
-        console.log('Response URL:', response.url);
-        console.log('Response headers:', [...response.headers.entries()]);
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText} - URL: ${response.url}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        return response.text();
-    })
-    .then(text => {
+        const text = await response.text();
         console.log('Raw response:', text);
         
-        let data;
+        let responseData;
         try {
-            data = JSON.parse(text);
+            responseData = JSON.parse(text);
         } catch (e) {
             console.error('JSON Parse Error:', e);
-            console.error('Respuesta recibida:', text);
-            throw new Error('Respuesta del servidor no válida. Posible error en el servidor PHP.');
+            throw new Error('Respuesta del servidor no válida');
         }
         
-        console.log('Parsed data:', data);
-        
+        console.log('Parsed data:', responseData);
         setButtonLoading(false);
         
-        if (data.success) {
-            console.log('Login exitoso:', data.user);
+        if (responseData.success) {
+            console.log('Login exitoso:', responseData.user);
             
-            // Limpiar sesión anterior antes de crear nueva
+            // Limpiar sesión anterior
             clearSession();
             
             // Almacenar datos del usuario
-            localStorage.setItem('user_data', JSON.stringify(data.user));
-            localStorage.setItem('login_time', new Date().getTime().toString());
+            const storedUser = storeUserSession(responseData.user);
             
-            // Verificar que se guardó correctamente
-            console.log('=== SESSION STORAGE DEBUG ===');
-            console.log('user_data:', localStorage.getItem('user_data'));
-            console.log('login_time:', localStorage.getItem('login_time'));
-            console.log('isSessionValid():', isSessionValid());
-            console.log('============================');
-            
+            // Mostrar mensaje de éxito
             showMessage('¡Inicio de sesión exitoso! Redirigiendo...', 'success');
             
-            // Redireccionar según el tipo de usuario
-            setTimeout(() => {
-                if (data.user.is_admin == 1) {
-                    console.log('Redirigiendo a admin.php');
-                    window.location.href = 'BACKOFFICE/admin.php';
+            // ESTABLECER SESIÓN PHP DE FORMA ASÍNCRONA (no bloqueante)
+            establishPhpSession(storedUser).then(result => {
+                if (result.success) {
+                    console.log('✅ PHP session established');
                 } else {
-                    console.log('Redirigiendo a perfil.php');
-                    window.location.href = 'perfil.php';
+                    console.warn('⚠️ PHP session not established, but continuing...');
                 }
+            });
+            
+            // REDIRECCIONAR INMEDIATAMENTE (sin esperar la sesión PHP)
+            setTimeout(() => {
+                redirectUser(storedUser);
             }, 1500);
             
         } else {
-            showMessage(data.message || 'Error al iniciar sesión', 'error');
+            showMessage(responseData.message || 'Error al iniciar sesión', 'error');
         }
-    })
-    .catch(error => {
-        console.error('=== FETCH ERROR DEBUG ===');
-        console.error('Error completo:', error);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        console.error('========================');
         
+    } catch (error) {
+        console.error('Login error:', error);
         setButtonLoading(false);
         
         if (error.message.includes('404')) {
-            showMessage('Error 404: API no encontrada. Verifica la ruta del servidor.', 'error');
+            showMessage('Error 404: API no encontrada', 'error');
         } else if (error.message.includes('Failed to fetch')) {
-            showMessage('Error de conexión. Verifica que el servidor esté funcionando.', 'error');
-        } else if (error.message.includes('NetworkError')) {
-            showMessage('Error de red. Verifica tu conexión a internet.', 'error');
+            showMessage('Error de conexión con el servidor', 'error');
         } else {
             showMessage('Error: ' + error.message, 'error');
         }
-    });
+    }
 });
 
 // Función para validar email
@@ -263,16 +333,13 @@ function isValidEmail(email) {
     return emailRegex.test(email);
 }
 
-// * VERIFICACIÓN DE SESIÓN AL CARGAR LA PÁGINA - CORREGIDA *
+// VERIFICACIÓN DE SESIÓN AL CARGAR LA PÁGINA (MEJORADA)
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== SESSION CHECK DEBUG ===');
     console.log('Current URL:', window.location.href);
     console.log('localStorage user_data:', localStorage.getItem('user_data'));
-    console.log('localStorage login_time:', localStorage.getItem('login_time'));
     console.log('isSessionValid():', isSessionValid());
-    console.log('API Base URL:', getApiBaseUrl());
     
-    // Detectar el tipo de página actual
     const isLoginPage = window.location.pathname.includes('login') || 
                        window.location.pathname.includes('index') ||
                        window.location.pathname.endsWith('/') ||
@@ -290,14 +357,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (user) {
             if (isLoginPage) {
-                // Ya está logueado y está en la página de login - redirigir
+                // Ya está logueado - redirigir
                 showMessage('Ya tienes una sesión activa. Redirigiendo...', 'success');
                 setTimeout(() => {
-                    if (user.is_admin == 1) {
-                        window.location.href = 'BACKOFFICE/admin.php';
-                    } else {
-                        window.location.href = 'perfil.php';
-                    }
+                    redirectUser(user);
                 }, 1000);
             } else if (isAdminPage && user.is_admin != 1) {
                 // Usuario normal tratando de acceder a área admin
@@ -306,17 +369,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.href = 'perfil.php';
                 }, 1500);
             }
-            // Si está en una página normal y tiene sesión válida, todo OK
         }
     } else {
         // No hay sesión válida
-        console.log('No hay sesión válida');
-        
         if (!isLoginPage) {
-            // Está en una página protegida sin sesión - redirigir al login
             showMessage('Por favor inicia sesión para acceder', 'error');
             setTimeout(() => {
-                window.location.href = 'index.html'; // O tu página de login
+                window.location.href = 'index.html';
             }, 1500);
         }
     }
@@ -324,7 +383,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('=========================');
 });
 
-// * FUNCIÓN PARA LOGOUT (opcional) *
+// FUNCIÓN PARA LOGOUT
 function logout() {
     clearSession();
     showMessage('Sesión cerrada correctamente', 'success');
@@ -333,39 +392,9 @@ function logout() {
     }, 1000);
 }
 
-// Función para probar la conectividad con el API
-function testApiConnection() {
-    const apiUrl = getApiBaseUrl();
-    console.log('Probando conexión con API:', apiUrl);
-    
-    fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-        }
-    })
-    .then(response => {
-        console.log('Test API Response:', response.status, response.statusText);
-        return response.text();
-    })
-    .then(text => {
-        console.log('Test API Response body:', text);
-    })
-    .catch(error => {
-        console.error('Test API Error:', error);
-    });
-}
-
-// Debug: Mostrar información de conexión
+// DEBUG INFO
 console.log('=== LOGIN DEBUG INFO ===');
 console.log('API Base URL:', getApiBaseUrl());
 console.log('Current Location:', window.location.href);
-console.log('Fecha/Hora:', new Date().toLocaleString());
-console.log('User Agent:', navigator.userAgent);
+console.log('Timestamp:', new Date().toLocaleString());
 console.log('========================');
-
-// Probar conexión al cargar (solo en desarrollo)
-if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    testApiConnection();
-}

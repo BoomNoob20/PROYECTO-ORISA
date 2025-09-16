@@ -1,16 +1,164 @@
 <?php
 session_start();
 
-// Verificación de autenticación del lado del servidor
+// FUNCIÓN DE AUTENTICACIÓN MEJORADA (sin JWT)
 function checkAdminAuth() {
-    if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || $_SESSION['is_admin'] != 1) {
-        header('Location: loginLP.php');
+    // Debug: mostrar información de sesión
+    error_log("=== ADMIN AUTH CHECK ===");
+    error_log("Session ID: " . session_id());
+    error_log("Session user_id: " . ($_SESSION['user_id'] ?? 'not set'));
+    error_log("Session is_admin: " . ($_SESSION['is_admin'] ?? 'not set'));
+    error_log("Session user_email: " . ($_SESSION['user_email'] ?? 'not set'));
+    error_log("Session data: " . print_r($_SESSION, true));
+    error_log("========================");
+    
+    // Verificar variables de sesión PHP primero
+    if (isset($_SESSION['user_id']) && isset($_SESSION['is_admin']) && $_SESSION['is_admin'] == 1) {
+        error_log("✅ Admin authentication successful via PHP session");
+        return true;
+    }
+    
+    // Si no hay sesión PHP válida, verificar si hay datos en JavaScript
+    // que puedan ser utilizados para reestablecer la sesión
+    if (!isset($_SESSION['user_id'])) {
+        error_log("❌ No PHP session found, redirecting to login");
+        
+        // Intentar limpiar cualquier sesión corrupta
+        session_destroy();
+        session_start();
+        
+        // Redirección con mensaje
+        ?>
+        <script>
+        console.log('No PHP session found, checking JavaScript session...');
+        const userData = sessionStorage.getItem('user_data') || localStorage.getItem('user_data');
+        
+        if (userData) {
+            try {
+                const user = JSON.parse(userData);
+                console.log('Found JS session data:', user);
+                
+                if (user.is_admin == 1 || user.is_admin === 1) {
+                    console.log('User is admin, attempting to reestablish PHP session...');
+                    
+                    // Intentar reestablecer sesión PHP
+                    fetch('../establish_session.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            action: 'establish_session',
+                            user_id: user.id,
+                            user_email: user.email,
+                            user_name: user.name,
+                            user_surname: user.surname,
+                            is_admin: user.is_admin,
+                            estado: user.estado
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log('✅ PHP session reestablished, reloading page');
+                            window.location.reload();
+                        } else {
+                            console.log('❌ Failed to reestablish session:', data.message);
+                            alert('Error de sesión. Por favor inicia sesión nuevamente.');
+                            window.location.href = '../loginLP.php';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error reestablishing session:', error);
+                        alert('Error de conexión. Por favor inicia sesión nuevamente.');
+                        window.location.href = '../loginLP.php';
+                    });
+                } else {
+                    console.log('❌ User is not admin');
+                    alert('No tienes permisos de administrador.');
+                    window.location.href = '../perfil.php';
+                }
+            } catch (e) {
+                console.error('Error parsing session data:', e);
+                sessionStorage.clear();
+                localStorage.clear();
+                alert('Datos de sesión corruptos. Por favor inicia sesión nuevamente.');
+                window.location.href = '../loginLP.php';
+            }
+        } else {
+            console.log('❌ No session data found');
+            alert('Debes iniciar sesión para acceder al panel de administración.');
+            window.location.href = '../loginLP.php';
+        }
+        </script>
+        <?php
         exit();
     }
+    
+    // Si el usuario no es admin
+    if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] != 1) {
+        error_log("❌ User is not admin: " . ($_SESSION['is_admin'] ?? 'not set'));
+        ?>
+        <script>
+        alert('No tienes permisos de administrador.');
+        window.location.href = '../perfil.php';
+        </script>
+        <?php
+        exit();
+    }
+    
+    return false;
+}
+
+// FUNCIONES AUXILIARES PARA SESIÓN (sin JWT)
+function getCurrentUserId() {
+    return $_SESSION['user_id'] ?? null;
+}
+
+function getCurrentUserEmail() {
+    return $_SESSION['user_email'] ?? null;
+}
+
+function getCurrentUserName() {
+    $name = ($_SESSION['user_name'] ?? '') . ' ' . ($_SESSION['user_surname'] ?? '');
+    return trim($name) ?: 'Admin';
+}
+
+function isCurrentUserAdmin() {
+    return isset($_SESSION['is_admin']) && $_SESSION['is_admin'] == 1;
+}
+
+// FUNCIÓN para generar token CSRF
+function generateCsrfToken() {
+    if (!isset($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+// FUNCIÓN para verificar token CSRF
+function verifyCsrfToken($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
 // Verificar autenticación antes de cualquier procesamiento
 checkAdminAuth();
+
+// Generar token CSRF
+$csrf_token = generateCsrfToken();
+
+// Obtener información del admin actual
+$admin_id = getCurrentUserId();
+$admin_name = getCurrentUserName();
+$admin_email = getCurrentUserEmail();
+
+// Debug info
+error_log("=== ADMIN PANEL LOADED ===");
+error_log("Admin ID: $admin_id");
+error_log("Admin Name: $admin_name");
+error_log("Admin Email: $admin_email");
+error_log("CSRF Token: $csrf_token");
+error_log("============================");
 
 // Configuración de la base de datos con múltiples opciones
 $db_configs = [
@@ -69,20 +217,42 @@ function validateId($id) {
     return filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 }
 
-// Función para registrar acciones del admin
-function logAdminAction($pdo, $admin_id, $action, $details) {
+// Función mejorada para registrar acciones del admin
+function logAdminAction($pdo, $action, $details) {
+    $admin_id = getCurrentUserId();
+    $admin_email = getCurrentUserEmail();
+    
+    if (!$admin_id) {
+        error_log("Cannot log admin action: no user ID in session");
+        return false;
+    }
+    
     try {
-        $stmt = $pdo->prepare("INSERT INTO admin_logs (admin_id, action, details, timestamp) VALUES (?, ?, ?, NOW())");
-        $stmt->execute([$admin_id, $action, $details]);
+        // Crear tabla de logs si no existe
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admin_id INT NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            details TEXT,
+            admin_email VARCHAR(255),
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_admin_id (admin_id),
+            INDEX idx_timestamp (timestamp)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        $stmt = $pdo->prepare("INSERT INTO admin_logs (admin_id, action, details, admin_email, timestamp) VALUES (?, ?, ?, ?, NOW())");
+        $stmt->execute([$admin_id, $action, $details, $admin_email]);
+        return true;
     } catch (Exception $e) {
         error_log("Error logging admin action: " . $e->getMessage());
+        return false;
     }
 }
 
 // Procesar acciones AJAX
 if (isset($_POST['action']) && $pdo) {
     // Verificar token CSRF
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    if (!isset($_POST['csrf_token']) || !verifyCsrfToken($_POST['csrf_token'])) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'Token de seguridad inválido']);
         exit;
@@ -102,7 +272,7 @@ if (isset($_POST['action']) && $pdo) {
                 $affected = $stmt->execute([$user_id]);
                 
                 if ($stmt->rowCount() > 0) {
-                    logAdminAction($pdo, $_SESSION['user_id'], 'approve_user', "Aprobó usuario ID: $user_id");
+                    logAdminAction($pdo, 'approve_user', "Aprobó usuario ID: $user_id");
                     $response = ['success' => true, 'message' => 'Usuario aprobado correctamente'];
                 } else {
                     throw new Exception('Usuario no encontrado o ya procesado');
@@ -117,7 +287,7 @@ if (isset($_POST['action']) && $pdo) {
                 
                 $stmt = $pdo->prepare("UPDATE usuario SET estado = 3 WHERE id = ? AND estado = 1");
                 if ($stmt->execute([$user_id]) && $stmt->rowCount() > 0) {
-                    logAdminAction($pdo, $_SESSION['user_id'], 'reject_user', "Rechazó usuario ID: $user_id");
+                    logAdminAction($pdo, 'reject_user', "Rechazó usuario ID: $user_id");
                     $response = ['success' => true, 'message' => 'Usuario rechazado correctamente'];
                 } else {
                     throw new Exception('Usuario no encontrado o ya procesado');
@@ -132,7 +302,7 @@ if (isset($_POST['action']) && $pdo) {
                 
                 $stmt = $pdo->prepare("UPDATE comprobantes_pago SET status = 'aprobado' WHERE id = ? AND status = 'pendiente'");
                 if ($stmt->execute([$payment_id]) && $stmt->rowCount() > 0) {
-                    logAdminAction($pdo, $_SESSION['user_id'], 'approve_payment', "Aprobó comprobante ID: $payment_id");
+                    logAdminAction($pdo, 'approve_payment', "Aprobó comprobante ID: $payment_id");
                     $response = ['success' => true, 'message' => 'Comprobante aprobado correctamente'];
                 } else {
                     throw new Exception('Comprobante no encontrado o ya procesado');
@@ -147,7 +317,7 @@ if (isset($_POST['action']) && $pdo) {
                 
                 $stmt = $pdo->prepare("UPDATE comprobantes_pago SET status = 'rechazado' WHERE id = ? AND status = 'pendiente'");
                 if ($stmt->execute([$payment_id]) && $stmt->rowCount() > 0) {
-                    logAdminAction($pdo, $_SESSION['user_id'], 'reject_payment', "Rechazó comprobante ID: $payment_id");
+                    logAdminAction($pdo, 'reject_payment', "Rechazó comprobante ID: $payment_id");
                     $response = ['success' => true, 'message' => 'Comprobante rechazado correctamente'];
                 } else {
                     throw new Exception('Comprobante no encontrado o ya procesado');
@@ -162,7 +332,7 @@ if (isset($_POST['action']) && $pdo) {
                 
                 $stmt = $pdo->prepare("UPDATE horas_trabajadas SET description = CONCAT(description, ' [APROBADO]') WHERE id = ? AND description NOT LIKE '%[APROBADO]%' AND description NOT LIKE '%[RECHAZADO]%'");
                 if ($stmt->execute([$hours_id]) && $stmt->rowCount() > 0) {
-                    logAdminAction($pdo, $_SESSION['user_id'], 'approve_hours', "Aprobó horas ID: $hours_id");
+                    logAdminAction($pdo, 'approve_hours', "Aprobó horas ID: $hours_id");
                     $response = ['success' => true, 'message' => 'Horas aprobadas correctamente'];
                 } else {
                     throw new Exception('Registro no encontrado o ya procesado');
@@ -177,7 +347,7 @@ if (isset($_POST['action']) && $pdo) {
                 
                 $stmt = $pdo->prepare("UPDATE horas_trabajadas SET description = CONCAT(description, ' [RECHAZADO]') WHERE id = ? AND description NOT LIKE '%[APROBADO]%' AND description NOT LIKE '%[RECHAZADO]%'");
                 if ($stmt->execute([$hours_id]) && $stmt->rowCount() > 0) {
-                    logAdminAction($pdo, $_SESSION['user_id'], 'reject_hours', "Rechazó horas ID: $hours_id");
+                    logAdminAction($pdo, 'reject_hours', "Rechazó horas ID: $hours_id");
                     $response = ['success' => true, 'message' => 'Horas rechazadas correctamente'];
                 } else {
                     throw new Exception('Registro no encontrado o ya procesado');
@@ -197,18 +367,12 @@ if (isset($_POST['action']) && $pdo) {
     exit;
 }
 
-// Generar token CSRF
-if (!isset($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
 // Inicializar variables
 $pending_users = [];
 $pending_payments = [];
 $pending_hours = [];
 $all_users = [];
 $error_message = '';
-$admin_name = isset($_SESSION['user_name']) ? $_SESSION['user_name'] . ' ' . $_SESSION['user_surname'] : 'Admin';
 
 // Solo obtener datos si hay conexión a la base de datos
 if ($pdo) {
@@ -219,6 +383,7 @@ if ($pdo) {
             admin_id INT NOT NULL,
             action VARCHAR(50) NOT NULL,
             details TEXT,
+            admin_email VARCHAR(255),
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_admin_id (admin_id),
             INDEX idx_timestamp (timestamp)
@@ -292,7 +457,7 @@ function h($string) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Urban Coop</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="CSS/adminStyles.css">
+    <link rel="stylesheet" href="../CSS/adminStyles.css">
     <script src="JSS/admin.js" defer></script>
 </head>
 <body>
@@ -387,219 +552,223 @@ function h($string) {
                             <i class="fas fa-cog"></i> Ir a Configuración
                         </button>
                     </div>
-
-                    
-                    <!-- Debug Section -->
-                    <div class="section" id="debug-section">
-                        <div class="debug-info">
-                            <div class="debug-title"><i class="fas fa-info-circle"></i> Información de Debug</div>
-                            <p><strong>Estado de conexión:</strong> Conectado... </p>
-                            <p><strong>Total usuarios en el sistema:</strong> <?= count($all_users) ?></p>
-                            <p><strong>Usuarios pendientes (estado = 1):</strong> <?= count($pending_users) ?></p>
-                            <p><strong>Comprobantes pendientes:</strong> <?= count($pending_payments) ?></p>
-                            <p><strong>Horas registradas (pendientes):</strong> <?= count($pending_hours) ?></p>
-                            
-                            <?php if (!empty($all_users)): ?>
-                                <details style="margin-top: 15px;">
-                                    <summary style="cursor: pointer; font-weight: 600; padding: 5px 0;">
-                                        <i class="fas fa-users"></i> Ver todos los usuarios (<?= count($all_users) ?>)
-                                    </summary>
-                                    <div style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
-                                        <?php foreach ($all_users as $user): ?>
-                                            <div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
-                                                <span><strong>ID:</strong> <?= $user['id'] ?> | <strong>Nombre:</strong> <?= htmlspecialchars($user['nombre'] . ' ' . $user['apellido']) ?> | <strong>Email:</strong> <?= htmlspecialchars($user['email']) ?></span>
-                                                <span class="status-badge <?= $user['estado'] == 1 ? 'status-pending' : ($user['estado'] == 2 ? 'status-approved' : 'status-rejected') ?>">
-                                                    <?= $user['estado'] == 1 ? 'Pendiente' : ($user['estado'] == 2 ? 'Aprobado' : 'Rechazado') ?>
-                                                </span>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </details>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <!-- Users Section -->
-                    <div class="section active" id="users-section">
-                        <?php if (empty($pending_users)): ?>
-                            <div class="empty-state">
-                                <i class="fas fa-user-check"></i>
-                                <h3>No hay trabajadores pendientes</h3>
-                                <p>Todos los trabajadores han sido procesados o no hay usuarios registrados</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="task-list">
-                                <?php foreach ($pending_users as $user): ?>
-                                    <div class="task-card" id="user-card-<?= $user['id'] ?>">
-                                        <div class="task-header">
-                                            <div class="task-checkbox" onclick="toggleCheckbox(this)"></div>
-                                            <div class="task-info">
-                                                <div class="task-title">
-                                                    <?= htmlspecialchars($user['nombre'] . ' ' . $user['apellido']) ?>
-                                                </div>
-                                                <div class="task-details">
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-envelope"></i>
-                                                        <span><?= htmlspecialchars($user['email']) ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-phone"></i>
-                                                        <span><?= htmlspecialchars($user['telefono'] ?: 'No especificado') ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-id-card"></i>
-                                                        <span>CI: <?= htmlspecialchars($user['cedula'] ?: 'No especificado') ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-user"></i>
-                                                        <span>ID: <?= $user['id'] ?></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="star-action" onclick="toggleStar(this)">
-                                                <i class="far fa-star"></i>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="task-actions">
-                                            <button class="btn btn-approve" onclick="processUser(<?= $user['id'] ?>, 'approve', this)">
-                                                <i class="fas fa-check"></i> Aceptar
-                                            </button>
-                                            <button class="btn btn-reject" onclick="processUser(<?= $user['id'] ?>, 'reject', this)">
-                                                <i class="fas fa-times"></i> Rechazar
-                                            </button>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- Payments Section -->
-                    <div class="section" id="payments-section">
-                        <?php if (empty($pending_payments)): ?>
-                            <div class="empty-state">
-                                <i class="fas fa-receipt"></i>
-                                <h3>No hay comprobantes pendientes</h3>
-                                <p>Todos los comprobantes han sido procesados o no hay comprobantes registrados</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="task-list">
-                                <?php foreach ($pending_payments as $payment): ?>
-                                    <div class="task-card" id="payment-card-<?= $payment['id'] ?>">
-                                        <div class="task-header">
-                                            <div class="task-checkbox" onclick="toggleCheckbox(this)"></div>
-                                            <div class="task-info">
-                                                <div class="task-title">Comprobante #<?= $payment['id'] ?> - <?= htmlspecialchars($payment['nombre'] . ' ' . $payment['apellido']) ?></div>
-                                                <div class="task-details">
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-calendar"></i>
-                                                        <span><?= htmlspecialchars($payment['payment_month']) ?>/<?= htmlspecialchars($payment['payment_year']) ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-file"></i>
-                                                        <span><?= htmlspecialchars($payment['file_name']) ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-weight"></i>
-                                                        <span><?= number_format($payment['file_size'] / 1024, 2) ?> KB</span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-clock"></i>
-                                                        <span><?= formatDate($payment['created_at']) ?></span>
-                                                    </div>
-                                                    <?php if ($payment['description']): ?>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-comment"></i>
-                                                        <span><?= htmlspecialchars($payment['description']) ?></span>
-                                                    </div>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                            <div class="star-action" onclick="toggleStar(this)">
-                                                <i class="far fa-star"></i>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="task-actions">
-                                            <?php if ($payment['file_path']): ?>
-                                                <a href="<?= htmlspecialchars($payment['file_path']) ?>" target="_blank" class="btn btn-view">
-                                                    <i class="fas fa-eye"></i> Ver Archivo
-                                                </a>
-                                            <?php endif; ?>
-                                            <button class="btn btn-approve" onclick="processPayment(<?= $payment['id'] ?>, 'approve', this)">
-                                                <i class="fas fa-check"></i> Aprobar
-                                            </button>
-                                            <button class="btn btn-reject" onclick="processPayment(<?= $payment['id'] ?>, 'reject', this)">
-                                                <i class="fas fa-times"></i> Rechazar
-                                            </button>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- Hours Section -->
-                    <div class="section" id="hours-section">
-                        <?php if (empty($pending_hours)): ?>
-                            <div class="empty-state">
-                                <i class="fas fa-clock"></i>
-                                <h3>No hay horas pendientes</h3>
-                                <p>Todas las horas han sido procesadas o no hay registros de horas</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="task-list">
-                                <?php foreach ($pending_hours as $hours): ?>
-                                    <div class="task-card" id="hours-card-<?= $hours['id'] ?>">
-                                        <div class="task-header">
-                                            <div class="task-checkbox" onclick="toggleCheckbox(this)"></div>
-                                            <div class="task-info">
-                                                <div class="task-title">
-                                                    Registro #<?= $hours['id'] ?> - <?= htmlspecialchars($hours['nombre'] . ' ' . $hours['apellido']) ?>
-                                                </div>
-                                                <div class="task-details">
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-clock"></i>
-                                                        <span><?= $hours['hours_worked'] ?> horas</span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-calendar"></i>
-                                                        <span><?= formatDateSimple($hours['work_date']) ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-tools"></i>
-                                                        <span><?= htmlspecialchars($hours['work_type']) ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-clock"></i>
-                                                        <span>Registrado: <?= formatDate($hours['created_at']) ?></span>
-                                                    </div>
-                                                    <div class="task-detail">
-                                                        <i class="fas fa-comment"></i>
-                                                        <span><?= htmlspecialchars($hours['description']) ?></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="star-action" onclick="toggleStar(this)">
-                                                <i class="far fa-star"></i>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="task-actions">
-                                            <button class="btn btn-approve" onclick="processHours(<?= $hours['id'] ?>, 'approve', this)">
-                                                <i class="fas fa-check"></i> Aprobar
-                                            </button>
-                                            <button class="btn btn-reject" onclick="processHours(<?= $hours['id'] ?>, 'reject', this)">
-                                                <i class="fas fa-times"></i> Rechazar
-                                            </button>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
                 <?php endif; ?>
+
+                <!-- Debug Section -->
+                <div class="section" id="debug-section">
+                    <div class="debug-info">
+                        <div class="debug-title"><i class="fas fa-info-circle"></i> Información de Debug</div>
+                        <p><strong>Estado de conexión:</strong> <?= $pdo ? 'Conectado' : 'Desconectado' ?></p>
+                        <p><strong>Total usuarios en el sistema:</strong> <?= count($all_users) ?></p>
+                        <p><strong>Usuarios pendientes (estado = 1):</strong> <?= count($pending_users) ?></p>
+                        <p><strong>Comprobantes pendientes:</strong> <?= count($pending_payments) ?></p>
+                        <p><strong>Horas registradas (pendientes):</strong> <?= count($pending_hours) ?></p>
+                        <p><strong>Admin ID:</strong> <?= $admin_id ?? 'No definido' ?></p>
+                        <p><strong>Admin Name:</strong> <?= $admin_name ?></p>
+                        <p><strong>Admin Email:</strong> <?= $admin_email ?? 'No definido' ?></p>
+                        <p><strong>Is Admin:</strong> <?= isCurrentUserAdmin() ? 'Sí' : 'No' ?></p>
+                        <p><strong>CSRF Token:</strong> <?= substr($csrf_token, 0, 10) ?>...</p>
+                        
+                        <?php if (!empty($all_users)): ?>
+                            <details style="margin-top: 15px;">
+                                <summary style="cursor: pointer; font-weight: 600; padding: 5px 0;">
+                                    <i class="fas fa-users"></i> Ver todos los usuarios (<?= count($all_users) ?>)
+                                </summary>
+                                <div style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+                                    <?php foreach ($all_users as $user): ?>
+                                        <div style="padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
+                                            <span><strong>ID:</strong> <?= $user['id'] ?> | <strong>Nombre:</strong> <?= htmlspecialchars($user['nombre'] . ' ' . $user['apellido']) ?> | <strong>Email:</strong> <?= htmlspecialchars($user['email']) ?></span>
+                                            <span class="status-badge <?= $user['estado'] == 1 ? 'status-pending' : ($user['estado'] == 2 ? 'status-approved' : 'status-rejected') ?>">
+                                                <?= $user['estado'] == 1 ? 'Pendiente' : ($user['estado'] == 2 ? 'Aprobado' : 'Rechazado') ?>
+                                            </span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Users Section -->
+                <div class="section active" id="users-section">
+                    <?php if (empty($pending_users)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-user-check"></i>
+                            <h3>No hay trabajadores pendientes</h3>
+                            <p>Todos los trabajadores han sido procesados o no hay usuarios registrados</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="task-list">
+                            <?php foreach ($pending_users as $user): ?>
+                                <div class="task-card" id="user-card-<?= $user['id'] ?>">
+                                    <div class="task-header">
+                                        <div class="task-checkbox" onclick="toggleCheckbox(this)"></div>
+                                        <div class="task-info">
+                                            <div class="task-title">
+                                                <?= htmlspecialchars($user['nombre'] . ' ' . $user['apellido']) ?>
+                                            </div>
+                                            <div class="task-details">
+                                                <div class="task-detail">
+                                                    <i class="fas fa-envelope"></i>
+                                                    <span><?= htmlspecialchars($user['email']) ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-phone"></i>
+                                                    <span><?= htmlspecialchars($user['telefono'] ?: 'No especificado') ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-id-card"></i>
+                                                    <span>CI: <?= htmlspecialchars($user['cedula'] ?: 'No especificado') ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-user"></i>
+                                                    <span>ID: <?= $user['id'] ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="star-action" onclick="toggleStar(this)">
+                                            <i class="far fa-star"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="task-actions">
+                                        <button class="btn btn-approve" onclick="processUser(<?= $user['id'] ?>, 'approve', this)">
+                                            <i class="fas fa-check"></i> Aceptar
+                                        </button>
+                                        <button class="btn btn-reject" onclick="processUser(<?= $user['id'] ?>, 'reject', this)">
+                                            <i class="fas fa-times"></i> Rechazar
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Payments Section -->
+                <div class="section" id="payments-section">
+                    <?php if (empty($pending_payments)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-receipt"></i>
+                            <h3>No hay comprobantes pendientes</h3>
+                            <p>Todos los comprobantes han sido procesados o no hay comprobantes registrados</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="task-list">
+                            <?php foreach ($pending_payments as $payment): ?>
+                                <div class="task-card" id="payment-card-<?= $payment['id'] ?>">
+                                    <div class="task-header">
+                                        <div class="task-checkbox" onclick="toggleCheckbox(this)"></div>
+                                        <div class="task-info">
+                                            <div class="task-title">Comprobante #<?= $payment['id'] ?> - <?= htmlspecialchars($payment['nombre'] . ' ' . $payment['apellido']) ?></div>
+                                            <div class="task-details">
+                                                <div class="task-detail">
+                                                    <i class="fas fa-calendar"></i>
+                                                    <span><?= htmlspecialchars($payment['payment_month']) ?>/<?= htmlspecialchars($payment['payment_year']) ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-file"></i>
+                                                    <span><?= htmlspecialchars($payment['file_name']) ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-weight"></i>
+                                                    <span><?= number_format($payment['file_size'] / 1024, 2) ?> KB</span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span><?= formatDate($payment['created_at']) ?></span>
+                                                </div>
+                                                <?php if ($payment['description']): ?>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-comment"></i>
+                                                    <span><?= htmlspecialchars($payment['description']) ?></span>
+                                                </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                        <div class="star-action" onclick="toggleStar(this)">
+                                            <i class="far fa-star"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="task-actions">
+                                        <?php if ($payment['file_path']): ?>
+                                            <a href="<?= htmlspecialchars($payment['file_path']) ?>" target="_blank" class="btn btn-view">
+                                                <i class="fas fa-eye"></i> Ver Archivo
+                                            </a>
+                                        <?php endif; ?>
+                                        <button class="btn btn-approve" onclick="processPayment(<?= $payment['id'] ?>, 'approve', this)">
+                                            <i class="fas fa-check"></i> Aprobar
+                                        </button>
+                                        <button class="btn btn-reject" onclick="processPayment(<?= $payment['id'] ?>, 'reject', this)">
+                                            <i class="fas fa-times"></i> Rechazar
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Hours Section -->
+                <div class="section" id="hours-section">
+                    <?php if (empty($pending_hours)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-clock"></i>
+                            <h3>No hay horas pendientes</h3>
+                            <p>Todas las horas han sido procesadas o no hay registros de horas</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="task-list">
+                            <?php foreach ($pending_hours as $hours): ?>
+                                <div class="task-card" id="hours-card-<?= $hours['id'] ?>">
+                                    <div class="task-header">
+                                        <div class="task-checkbox" onclick="toggleCheckbox(this)"></div>
+                                        <div class="task-info">
+                                            <div class="task-title">
+                                                Registro #<?= $hours['id'] ?> - <?= htmlspecialchars($hours['nombre'] . ' ' . $hours['apellido']) ?>
+                                            </div>
+                                            <div class="task-details">
+                                                <div class="task-detail">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span><?= $hours['hours_worked'] ?> horas</span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-calendar"></i>
+                                                    <span><?= formatDateSimple($hours['work_date']) ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-tools"></i>
+                                                    <span><?= htmlspecialchars($hours['work_type']) ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span>Registrado: <?= formatDate($hours['created_at']) ?></span>
+                                                </div>
+                                                <div class="task-detail">
+                                                    <i class="fas fa-comment"></i>
+                                                    <span><?= htmlspecialchars($hours['description']) ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="star-action" onclick="toggleStar(this)">
+                                            <i class="far fa-star"></i>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="task-actions">
+                                        <button class="btn btn-approve" onclick="processHours(<?= $hours['id'] ?>, 'approve', this)">
+                                            <i class="fas fa-check"></i> Aprobar
+                                        </button>
+                                        <button class="btn btn-reject" onclick="processHours(<?= $hours['id'] ?>, 'reject', this)">
+                                            <i class="fas fa-times"></i> Rechazar
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
         </main>
     </div>
@@ -641,7 +810,6 @@ function h($string) {
         box-shadow: 0 4px 15px rgba(0,0,0,0.15);
     }
 
-    /* Responsive para móvil */
     @media (max-width: 768px) {
         .profile-btn {
             width: 50px;
@@ -656,7 +824,7 @@ function h($string) {
     <script>
     function goToProfile() {
         // Verificar que el usuario esté logueado antes de redirigir
-        const userData = sessionStorage.getItem('user_data');
+        const userData = sessionStorage.getItem('user_data') || localStorage.getItem('user_data');
         
         if (!userData) {
             alert('Error: No se encontró información de sesión');
@@ -665,51 +833,87 @@ function h($string) {
         }
         
         // Redirigir al perfil
-        window.location.href = 'perfil.php';
+        window.location.href = '../perfil.php';
     }
-    </script>
-    
-    <!-- AGREGAR AQUÍ EL CÓDIGO DE SESIÓN -->
-    <script>
+
+    // VERIFICACIÓN DE SESIÓN MEJORADA
     document.addEventListener('DOMContentLoaded', function() {
+        console.log('=== ADMIN PANEL SESSION CHECK ===');
         
-        // VERIFICAR SI EL USUARIO ESTÁ LOGUEADO
-        const userData = sessionStorage.getItem('user_data');
+        // Verificar datos en ambos storages
+        const userDataSession = sessionStorage.getItem('user_data');
+        const userDataLocal = localStorage.getItem('user_data');
+        
+        console.log('sessionStorage user_data:', userDataSession);
+        console.log('localStorage user_data:', userDataLocal);
+        
+        // Usar sessionStorage primero, luego localStorage como fallback
+        const userData = userDataSession || userDataLocal;
         
         if (!userData) {
+            console.log('❌ No session data found, redirecting to login');
             alert('Debes iniciar sesión para acceder a esta página');
             document.location = '../loginLP.php';
             return;
         }
         
-        const user = JSON.parse(userData);
-        
-        // VERIFICAR PERMISOS DE ADMIN
-        if (user.is_admin != 1) {
-            alert('No tienes permisos para acceder al panel de administración');
-            document.location = 'perfil.php';
+        let user;
+        try {
+            user = JSON.parse(userData);
+        } catch (e) {
+            console.error('❌ Invalid session data:', e);
+            alert('Datos de sesión corruptos, por favor inicia sesión nuevamente');
+            sessionStorage.clear();
+            localStorage.clear();
+            document.location = '../loginLP.php';
             return;
         }
         
-        //  MOSTRAR INFORMACIÓN DEL USUARIO ADMIN
-        console.log(' Admin actual:');
+        console.log('User data parsed:', user);
+        console.log('User is_admin:', user.is_admin, 'Type:', typeof user.is_admin);
+        
+        // VERIFICAR PERMISOS DE ADMIN - MEJORADO
+        const isAdmin = user.is_admin === 1 || user.is_admin === '1' || user.is_admin == 1;
+        console.log('Is admin check result:', isAdmin);
+        
+        if (!isAdmin) {
+            console.log('❌ User is not admin, redirecting to profile');
+            alert('No tienes permisos para acceder al panel de administración');
+            document.location = '../perfil.php';
+            return;
+        }
+        
+        console.log('✅ Admin access granted');
+        
+        // Si no hay datos en sessionStorage pero sí en localStorage, copiarlos
+        if (!userDataSession && userDataLocal) {
+            console.log('Copying from localStorage to sessionStorage');
+            sessionStorage.setItem('user_data', userDataLocal);
+            const loginTime = localStorage.getItem('login_time');
+            if (loginTime) {
+                sessionStorage.setItem('login_time', loginTime);
+            }
+        }
+        
+        console.log('✅ Admin actual:');
         console.log('ID:', user.id);
-        console.log('Nombre completo:', user.name + ' ' + user.surname);
-        console.log('Email:', user.email);
+        console.log('Nombre completo:', (user.name || user.usr_name || '') + ' ' + (user.surname || user.usr_surname || ''));
+        console.log('Email:', user.email || user.usr_email);
         console.log('Es Admin:', user.is_admin);
         
         // ACTUALIZAR ELEMENTOS DE LA PÁGINA
-        // Actualizar nombre del admin en el header
         const userMenu = document.querySelector('.user-menu span');
         if (userMenu) {
-            userMenu.textContent = user.name + ' ' + user.surname;
+            const fullName = (user.name || user.usr_name || '') + ' ' + (user.surname || user.usr_surname || '');
+            userMenu.textContent = fullName.trim() || 'Admin';
         }
         
+        console.log('=================================');
     });
 
-    //  FUNCIONES AUXILIARES
+    // FUNCIONES AUXILIARES MEJORADAS
     function getCurrentUser() {
-        const userData = sessionStorage.getItem('user_data');
+        const userData = sessionStorage.getItem('user_data') || localStorage.getItem('user_data');
         return userData ? JSON.parse(userData) : null;
     }
 
@@ -720,317 +924,323 @@ function h($string) {
 
     function isAdmin() {
         const user = getCurrentUser();
-        return user && user.is_admin == 1;
+        return user && (user.is_admin === 1 || user.is_admin === '1' || user.is_admin == 1);
     }
 
     function logout() {
         if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
+            // Limpiar ambos storages
             sessionStorage.clear();
+            localStorage.clear();
             alert('Sesión cerrada exitosamente');
             document.location = '../loginLP.php';
         }
     }
-    </script>
 
+    // FUNCIONES DE LA INTERFAZ
+    let currentSection = 'users';
 
-    <script>
-        // Variables globales
-        let currentSection = 'users';
+    function showSection(sectionName) {
+        // Ocultar todas las secciones
+        document.querySelectorAll('.section').forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        // Remover clase active de todos los links
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Mostrar la sección seleccionada
+        const section = document.getElementById(sectionName + '-section');
+        if (section) {
+            section.classList.add('active');
+        }
+        
+        // Activar el link correspondiente
+        const navLink = document.getElementById(sectionName + '-nav');
+        if (navLink) {
+            navLink.classList.add('active');
+        }
+        
+        // Actualizar título
+        const titles = {
+            'users': 'Trabajadores en Espera',
+            'payments': 'Comprobantes de Pago',
+            'hours': 'Horas Trabajadas',
+            'setup': 'Configurar Base de Datos',
+            'debug': 'Información Debug'
+        };
+        
+        const titleElement = document.getElementById('page-title');
+        if (titleElement && titles[sectionName]) {
+            titleElement.textContent = titles[sectionName];
+        }
+        
+        currentSection = sectionName;
+        
+        // Cerrar sidebar en móvil
+        if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('open');
+        }
+    }
 
-        function showSection(sectionName) {
-            // Ocultar todas las secciones
-            document.querySelectorAll('.section').forEach(section => {
-                section.classList.remove('active');
-            });
+    function showAlert(message, type) {
+        const alert = document.getElementById(type + '-alert');
+        if (alert) {
+            alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
+            alert.style.display = 'block';
             
-            // Remover clase active de todos los links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
             
-            // Mostrar la sección seleccionada
-            const section = document.getElementById(sectionName + '-section');
-            if (section) {
-                section.classList.add('active');
-            }
+            // Scroll to alert
+            alert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    function addLoadingState(button) {
+        if (button) {
+            button.disabled = true;
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<div class="spinner"></div> Procesando...';
             
-            // Activar el link correspondiente
-            const navLink = document.getElementById(sectionName + '-nav');
-            if (navLink) {
-                navLink.classList.add('active');
-            }
-            
-            // Actualizar título
-            const titles = {
-                'users': 'Trabajadores en Espera',
-                'payments': 'Comprobantes de Pago',
-                'hours': 'Horas Trabajadas',
-                'setup': 'Configurar Base de Datos',
-                'debug': 'Información Debug'
+            return function removeLoadingState() {
+                button.disabled = false;
+                button.innerHTML = originalContent;
             };
-            
-            const titleElement = document.getElementById('page-title');
-            if (titleElement && titles[sectionName]) {
-                titleElement.textContent = titles[sectionName];
-            }
-            
-            currentSection = sectionName;
-            
-            // Cerrar sidebar en móvil
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('open');
-            }
         }
+        return function() {};
+    }
 
-        function showAlert(message, type) {
-            const alert = document.getElementById(type + '-alert');
-            if (alert) {
-                alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
-                alert.style.display = 'block';
-                
-                // Auto-hide after 5 seconds
-                setTimeout(() => {
-                    alert.style.display = 'none';
-                }, 5000);
-                
-                // Scroll to alert
-                alert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-
-        function addLoadingState(button) {
-            if (button) {
-                button.disabled = true;
-                const originalContent = button.innerHTML;
-                button.innerHTML = '<div class="spinner"></div> Procesando...';
-                
-                return function removeLoadingState() {
-                    button.disabled = false;
-                    button.innerHTML = originalContent;
-                };
-            }
-            return function() {};
-        }
-
-        function processUser(userId, action, button) {
-            const removeLoading = addLoadingState(button);
-            const actionText = action === 'approve' ? 'approve_user' : 'reject_user';
-            
-            fetch('admin.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `action=${actionText}&user_id=${userId}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                removeLoading();
-                if (data.success) {
-                    showAlert(data.message, 'success');
-                    const card = document.getElementById(`user-card-${userId}`);
-                    if (card) {
-                        card.style.transform = 'translateX(100%)';
-                        card.style.opacity = '0';
-                        setTimeout(() => {
-                            card.style.display = 'none';
-                            updateBadge('users-nav');
-                            checkEmptyState('users-section');
-                        }, 300);
-                    }
-                } else {
-                    showAlert(data.message || 'Error al procesar usuario', 'error');
+    // FUNCIONES DE PROCESAMIENTO CON CSRF TOKEN
+    function processUser(userId, action, button) {
+        const removeLoading = addLoadingState(button);
+        const actionText = action === 'approve' ? 'approve_user' : 'reject_user';
+        
+        const formData = new FormData();
+        formData.append('action', actionText);
+        formData.append('user_id', userId);
+        formData.append('csrf_token', '<?= $csrf_token ?>');
+        
+        fetch('admin.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            removeLoading();
+            if (data.success) {
+                showAlert(data.message, 'success');
+                const card = document.getElementById(`user-card-${userId}`);
+                if (card) {
+                    card.style.transform = 'translateX(100%)';
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.style.display = 'none';
+                        updateBadge('users-nav');
+                        checkEmptyState('users-section');
+                    }, 300);
                 }
-            })
-            .catch(error => {
-                removeLoading();
-                showAlert('Error de conexión', 'error');
-                console.error('Error:', error);
-            });
-        }
-
-        function processPayment(paymentId, action, button) {
-            const removeLoading = addLoadingState(button);
-            const actionText = action === 'approve' ? 'approve_payment' : 'reject_payment';
-            
-            fetch('admin.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `action=${actionText}&payment_id=${paymentId}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                removeLoading();
-                if (data.success) {
-                    showAlert(data.message, 'success');
-                    const card = document.getElementById(`payment-card-${paymentId}`);
-                    if (card) {
-                        card.style.transform = 'translateX(100%)';
-                        card.style.opacity = '0';
-                        setTimeout(() => {
-                            card.style.display = 'none';
-                            updateBadge('payments-nav');
-                            checkEmptyState('payments-section');
-                        }, 300);
-                    }
-                } else {
-                    showAlert(data.message || 'Error al procesar comprobante', 'error');
-                }
-            })
-            .catch(error => {
-                removeLoading();
-                showAlert('Error de conexión', 'error');
-                console.error('Error:', error);
-            });
-        }
-
-        function processHours(hoursId, action, button) {
-            const removeLoading = addLoadingState(button);
-            const actionText = action === 'approve' ? 'approve_hours' : 'reject_hours';
-            
-            fetch('admin.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `action=${actionText}&hours_id=${hoursId}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                removeLoading();
-                if (data.success) {
-                    showAlert(data.message, 'success');
-                    const card = document.getElementById(`hours-card-${hoursId}`);
-                    if (card) {
-                        card.style.transform = 'translateX(100%)';
-                        card.style.opacity = '0';
-                        setTimeout(() => {
-                            card.style.display = 'none';
-                            updateBadge('hours-nav');
-                            checkEmptyState('hours-section');
-                        }, 300);
-                    }
-                } else {
-                    showAlert(data.message || 'Error al procesar horas', 'error');
-                }
-            })
-            .catch(error => {
-                removeLoading();
-                showAlert('Error de conexión', 'error');
-                console.error('Error:', error);
-            });
-        }
-
-        function updateBadge(navId) {
-            const badge = document.querySelector(`#${navId} .badge`);
-            if (badge) {
-                let count = parseInt(badge.textContent) - 1;
-                badge.textContent = count < 0 ? 0 : count;
-                
-                // Add animation
-                badge.style.transform = 'scale(1.2)';
-                setTimeout(() => {
-                    badge.style.transform = 'scale(1)';
-                }, 200);
-            }
-        }
-
-        function checkEmptyState(sectionId) {
-            const section = document.getElementById(sectionId);
-            const taskList = section.querySelector('.task-list');
-            const visibleCards = taskList ? taskList.querySelectorAll('.task-card:not([style*="display: none"])') : [];
-            
-            if (visibleCards.length === 0) {
-                const emptyStateHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-check-circle"></i>
-                        <h3>¡Todo procesado!</h3>
-                        <p>No hay elementos pendientes en esta sección</p>
-                    </div>
-                `;
-                
-                if (taskList) {
-                    taskList.innerHTML = emptyStateHTML;
-                }
-            }
-        }
-
-        function toggleCheckbox(checkbox) {
-            const isChecked = checkbox.style.backgroundColor === 'rgb(211, 47, 47)';
-            
-            if (isChecked) {
-                checkbox.style.backgroundColor = '';
-                checkbox.innerHTML = '';
-                checkbox.style.borderColor = '#d0d0d3';
             } else {
-                checkbox.style.backgroundColor = '#d32f2f';
-                checkbox.style.borderColor = '#d32f2f';
-                checkbox.innerHTML = '<i class="fas fa-check" style="color: white; font-size: 12px;"></i>';
+                showAlert(data.message || 'Error al procesar usuario', 'error');
             }
-        }
+        })
+        .catch(error => {
+            removeLoading();
+            showAlert('Error de conexión', 'error');
+            console.error('Error:', error);
+        });
+    }
 
-        function toggleStar(starElement) {
-            const icon = starElement.querySelector('i');
-            const isStarred = icon.classList.contains('fas');
-            
-            if (isStarred) {
-                icon.classList.remove('fas');
-                icon.classList.add('far');
-                starElement.classList.remove('starred');
+    function processPayment(paymentId, action, button) {
+        const removeLoading = addLoadingState(button);
+        const actionText = action === 'approve' ? 'approve_payment' : 'reject_payment';
+        
+        const formData = new FormData();
+        formData.append('action', actionText);
+        formData.append('payment_id', paymentId);
+        formData.append('csrf_token', '<?= $csrf_token ?>');
+        
+        fetch('admin.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            removeLoading();
+            if (data.success) {
+                showAlert(data.message, 'success');
+                const card = document.getElementById(`payment-card-${paymentId}`);
+                if (card) {
+                    card.style.transform = 'translateX(100%)';
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.style.display = 'none';
+                        updateBadge('payments-nav');
+                        checkEmptyState('payments-section');
+                    }, 300);
+                }
             } else {
-                icon.classList.remove('far');
-                icon.classList.add('fas');
-                starElement.classList.add('starred');
+                showAlert(data.message || 'Error al procesar comprobante', 'error');
             }
+        })
+        .catch(error => {
+            removeLoading();
+            showAlert('Error de conexión', 'error');
+            console.error('Error:', error);
+        });
+    }
+
+    function processHours(hoursId, action, button) {
+        const removeLoading = addLoadingState(button);
+        const actionText = action === 'approve' ? 'approve_hours' : 'reject_hours';
+        
+        const formData = new FormData();
+        formData.append('action', actionText);
+        formData.append('hours_id', hoursId);
+        formData.append('csrf_token', '<?= $csrf_token ?>');
+        
+        fetch('admin.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            removeLoading();
+            if (data.success) {
+                showAlert(data.message, 'success');
+                const card = document.getElementById(`hours-card-${hoursId}`);
+                if (card) {
+                    card.style.transform = 'translateX(100%)';
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.style.display = 'none';
+                        updateBadge('hours-nav');
+                        checkEmptyState('hours-section');
+                    }, 300);
+                }
+            } else {
+                showAlert(data.message || 'Error al procesar horas', 'error');
+            }
+        })
+        .catch(error => {
+            removeLoading();
+            showAlert('Error de conexión', 'error');
+            console.error('Error:', error);
+        });
+    }
+
+    function updateBadge(navId) {
+        const badge = document.querySelector(`#${navId} .badge`);
+        if (badge) {
+            let count = parseInt(badge.textContent) - 1;
+            badge.textContent = count < 0 ? 0 : count;
             
             // Add animation
-            starElement.style.transform = 'scale(1.2)';
+            badge.style.transform = 'scale(1.2)';
             setTimeout(() => {
-                starElement.style.transform = 'scale(1)';
+                badge.style.transform = 'scale(1)';
             }, 200);
         }
+    }
 
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('open');
+    function checkEmptyState(sectionId) {
+        const section = document.getElementById(sectionId);
+        const taskList = section.querySelector('.task-list');
+        const visibleCards = taskList ? taskList.querySelectorAll('.task-card:not([style*="display: none"])') : [];
+        
+        if (visibleCards.length === 0) {
+            const emptyStateHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>¡Todo procesado!</h3>
+                    <p>No hay elementos pendientes en esta sección</p>
+                </div>
+            `;
+            
+            if (taskList) {
+                taskList.innerHTML = emptyStateHTML;
+            }
         }
+    }
 
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            // Animate cards on load
-            const cards = document.querySelectorAll('.task-card');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                
-                setTimeout(() => {
-                    card.style.transition = 'all 0.3s ease';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
+    function toggleCheckbox(checkbox) {
+        const isChecked = checkbox.style.backgroundColor === 'rgb(211, 47, 47)';
+        
+        if (isChecked) {
+            checkbox.style.backgroundColor = '';
+            checkbox.innerHTML = '';
+            checkbox.style.borderColor = '#d0d0d3';
+        } else {
+            checkbox.style.backgroundColor = '#d32f2f';
+            checkbox.style.borderColor = '#d32f2f';
+            checkbox.innerHTML = '<i class="fas fa-check" style="color: white; font-size: 12px;"></i>';
+        }
+    }
 
-            // Close sidebar when clicking outside on mobile
-            document.addEventListener('click', function(e) {
-                if (window.innerWidth <= 768) {
-                    const sidebar = document.getElementById('sidebar');
-                    const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
-                    
-                    if (!sidebar.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
-                        sidebar.classList.remove('open');
-                    }
-                }
-            });
+    function toggleStar(starElement) {
+        const icon = starElement.querySelector('i');
+        const isStarred = icon.classList.contains('fas');
+        
+        if (isStarred) {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+            starElement.classList.remove('starred');
+        } else {
+            icon.classList.remove('far');
+            icon.classList.add('fas');
+            starElement.classList.add('starred');
+        }
+        
+        // Add animation
+        starElement.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            starElement.style.transform = 'scale(1)';
+        }, 200);
+    }
 
-            // Handle window resize
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 768) {
-                    document.getElementById('sidebar').classList.remove('open');
-                }
-            });
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('open');
+    }
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animate cards on load
+        const cards = document.querySelectorAll('.task-card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.3s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
         });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('sidebar');
+                const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+                
+                if (!sidebar.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                }
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+        });
+    });
     </script>
 </body>
 </html>

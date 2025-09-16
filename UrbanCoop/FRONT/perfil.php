@@ -40,138 +40,1593 @@ $can_access = true;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Urban Coop - Dashboard</title>
     <link rel="stylesheet" href="CSS/perfilStyles.css">
+    <style>
+        /* ===== URBAN COOP - PERFIL STYLES ===== */
+/* Paleta de colores: Rojo (#DC143C), Blanco (#FFFFFF), Negro (#1a1a1a), Grises */
+
+/* === VARIABLES CSS === */
+:root {
+  /* Colores principales */
+  --color-primary: #DC143C;
+  --color-primary-dark: #B71C1C;
+  --color-primary-light: #FF5252;
+  --color-white: #FFFFFF;
+  --color-black: #1a1a1a;
+  --color-text: #2c2c2c;
+  --color-text-light: #6b6b6b;
+  
+  /* Colores de fondo */
+  --color-background: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f5f5f5;
+  
+  /* Colores de borde */
+  --color-border: #e0e0e0;
+  --color-border-light: #f0f0f0;
+  --color-border-dark: #d0d0d0;
+  
+  /* Estados */
+  --color-success: #2e7d32;
+  --color-warning: #f57c00;
+  --color-error: var(--color-primary);
+  --color-info: #1976d2;
+  
+  /* Espaciado */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  /* Tipografía */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+  
+  /* Sombras */
+  --shadow-sm: 0 2px 4px rgba(28, 28, 28, 0.1);
+  --shadow-md: 0 4px 12px rgba(28, 28, 28, 0.15);
+  --shadow-lg: 0 8px 24px rgba(28, 28, 28, 0.2);
+  
+  /* Bordes redondeados */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 50%;
+  
+  /* Transiciones */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* === RESET Y BASE === */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === LOADING SCREEN === */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--color-border);
+  border-top: 4px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 1s linear infinite;
+  margin: 0 auto var(--spacing-md);
+}
+
+.loading-text {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  color: var(--color-text-light);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* === LAYOUT PRINCIPAL === */
+.main-app {
+  display: none;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  background: var(--color-background);
+}
+
+/* === SIDEBAR === */
+.sidebar {
+  width: 280px;
+  background: var(--color-black);
+  color: var(--color-white);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: var(--shadow-md);
+}
+
+.sidebar-header {
+  padding: var(--spacing-xl) var(--spacing-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logo-container {
+  margin-bottom: var(--spacing-lg);
+}
+
+.logo {
+  width: 100%;
+  max-width: 160px;
+  height: auto;
+  object-fit: contain;
+}
+
+.search-container {
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  padding-right: 40px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-white);
+  font-size: var(--font-size-sm);
+  transition: var(--transition-normal);
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.search-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.3);
+}
+
+.search-icon {
+  position: absolute;
+  right: var(--spacing-md);
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sidebar-nav {
+  padding: var(--spacing-lg);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  position: relative;
+}
+
+.nav-item:hover {
+  background: rgba(220, 20, 60, 0.15);
+}
+
+.nav-item-icon {
+  margin-right: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-item-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.nav-item-badge {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: var(--radius-full);
+  padding: 2px var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* === MAIN CONTENT === */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* === HEADER === */
+.app-header {
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--spacing-xl);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-nav {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: none;
+  background: transparent;
+  color: var(--color-text-light);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition: var(--transition-normal);
+  position: relative;
+}
+
+.nav-button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+}
+
+.nav-button.active {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.nav-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-primary);
+}
+
+/* === PROFILE SECTION === */
+.profile-section {
+  position: relative;
+}
+
+.profile-dropdown {
+  position: relative;
+}
+
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-normal);
+  color: var(--color-text);
+}
+
+.profile-button:hover {
+  background: var(--color-surface-hover);
+}
+
+.dropdown-arrow {
+  transition: var(--transition-fast);
+}
+
+.profile-dropdown.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-sm));
+  right: 0;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 180px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: var(--transition-normal);
+  z-index: 1000;
+}
+
+.profile-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.profile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  text-align: left;
+  font-size: var(--font-size-sm);
+}
+
+.profile-menu-item:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+}
+
+/* === CONTENT WRAPPER === */
+.content-wrapper {
+  flex: 1;
+  padding: var(--spacing-xl);
+  overflow-y: auto;
+}
+
+.content-section {
+  display: none;
+}
+
+.content-section.active {
+  display: block;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.section-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+/* === BUTTONS === */
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-button.primary {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-color: var(--color-primary);
+}
+
+.action-button.primary:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.action-button.secondary {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.action-button.secondary:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-dark);
+}
+
+.action-button.danger {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.action-button.danger:hover {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.action-button.small {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-xs);
+}
+
+/* === SUMMARY GRID === */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.summary-card {
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--color-primary);
+  transition: var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+}
+
+.summary-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.card-icon {
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  background: rgba(220, 20, 60, 0.1);
+  color: var(--color-primary);
+}
+
+.card-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.card-amount {
+  font-size: var(--font-size-2xl);
+  font-weight: 800;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.2;
+}
+
+.summary-card.balance .card-amount {
+  color: var(--color-success);
+}
+
+.summary-card.fee .card-amount {
+  color: var(--color-primary);
+}
+
+.card-status,
+.card-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+/* === PROGRESS BAR === */
+.progress-container {
+  margin-bottom: var(--spacing-md);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: var(--color-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: var(--spacing-sm);
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-success) 0%, var(--color-primary) 100%);
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-slow);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-text {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  text-align: center;
+}
+
+/* === MESSAGES === */
+.messages-container {
+  margin-bottom: var(--spacing-lg);
+}
+
+.alert {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  border-left: 4px solid;
+  margin-bottom: var(--spacing-md);
+}
+
+.alert-success {
+  background-color: rgba(46, 125, 50, 0.1);
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.alert-error {
+  background-color: rgba(220, 20, 60, 0.1);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.alert-warning {
+  background-color: rgba(245, 124, 0, 0.1);
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+/* === FORMS === */
+.form-modal {
+  display: none;
+  margin-bottom: var(--spacing-xl);
+}
+
+.form-container {
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.form-header {
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: var(--color-white);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-header h2 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-white);
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-normal);
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.form-container form {
+  padding: var(--spacing-lg);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.form-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-sm);
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: var(--spacing-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  color: var(--color-text);
+  background: var(--color-white);
+  transition: var(--transition-normal);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.1);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-hint {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-light);
+  margin-top: var(--spacing-xs);
+}
+
+.amount-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.amount-symbol {
+  position: absolute;
+  left: var(--spacing-md);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-light);
+  z-index: 1;
+}
+
+.form-input.amount {
+  padding-left: 36px;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-end;
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* === UPLOAD ZONE === */
+.upload-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  margin-bottom: var(--spacing-lg);
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.upload-zone:hover {
+  border-color: var(--color-primary);
+  background: rgba(220, 20, 60, 0.05);
+}
+
+.upload-zone.dragover {
+  border-color: var(--color-primary);
+  background: rgba(220, 20, 60, 0.1);
+  transform: scale(1.02);
+}
+
+.upload-icon {
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.upload-text {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.upload-subtext {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.upload-info {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-light);
+  margin: 0;
+}
+
+.upload-zone input[type="file"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+}
+
+/* === TASKS === */
+.task-container {
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border-light);
+  transition: var(--transition-normal);
+  position: relative;
+}
+
+.task-item:last-child {
+  border-bottom: none;
+}
+
+.task-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.task-item.completed {
+  opacity: 0.6;
+}
+
+.task-item.completed .task-text {
+  text-decoration: line-through;
+  color: var(--color-text-light);
+}
+
+.task-checkbox-container {
+  position: relative;
+  margin-right: var(--spacing-md);
+}
+
+.task-checkbox {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border-dark);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.task-checkbox:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.checkbox-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.task-checkbox:checked + .checkbox-label::after {
+  content: '✓';
+  color: var(--color-white);
+  font-weight: bold;
+  font-size: var(--font-size-xs);
+}
+
+.task-text {
+  flex: 1;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.task-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  opacity: 0;
+  transition: var(--transition-normal);
+}
+
+.task-item:hover .task-actions {
+  opacity: 1;
+}
+
+.task-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-normal);
+  color: var(--color-text-light);
+}
+
+.task-action-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+}
+
+.star-btn.favorite {
+  color: var(--color-warning);
+}
+
+.star-btn.favorite svg {
+  fill: currentColor;
+}
+
+/* === PAYMENT CARDS === */
+.payments-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.payment-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-white);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  transition: var(--transition-normal);
+}
+
+.payment-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.payment-info {
+  flex: 1;
+}
+
+.payment-title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.payment-details {
+  display: flex;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+.payment-amount {
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+.payment-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.payment-status {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.payment-status.pending {
+  background: rgba(245, 124, 0, 0.1);
+  color: var(--color-warning);
+}
+
+.payment-status.approved {
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--color-success);
+}
+
+.payment-status.rejected {
+  background: rgba(220, 20, 60, 0.1);
+  color: var(--color-primary);
+}
+
+/* === HOURS === */
+.hours-summary {
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-xl);
+  border-left: 4px solid var(--color-info);
+}
+
+.summary-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.summary-stats {
+  display: flex;
+  gap: var(--spacing-xl);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+.stat-value {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.hours-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.hours-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background: var(--color-white);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  transition: var(--transition-normal);
+}
+
+.hours-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.hours-info {
+  flex: 1;
+}
+
+.hours-title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.hours-type {
+  display: inline-block;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.hours-description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.hours-date {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-light);
+}
+
+.hours-actions {
+  margin-left: var(--spacing-lg);
+}
+
+/* === RESPONSIVE DESIGN === */
+@media (max-width: 1200px) {
+  .summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  
+  .content-wrapper {
+    padding: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+  
+  .sidebar-header {
+    padding: var(--spacing-lg);
+  }
+  
+  .sidebar-nav {
+    display: flex;
+    overflow-x: auto;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+  
+  .nav-item {
+    flex-shrink: 0;
+    margin-bottom: 0;
+  }
+  
+  .app-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+    height: 60px;
+  }
+  
+  .header-nav {
+    overflow-x: auto;
+    gap: var(--spacing-xs);
+  }
+  
+  .nav-button {
+    flex-shrink: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-xs);
+  }
+  
+  .content-wrapper {
+    padding: var(--spacing-lg) var(--spacing-md);
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-md);
+  }
+  
+  .section-title {
+    font-size: var(--font-size-xl);
+  }
+  
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .form-actions {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  .action-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .payment-card,
+  .hours-card {
+    flex-direction: column;
+    gap: var(--spacing-md);
+    align-items: stretch;
+  }
+  
+  .payment-actions,
+  .hours-actions {
+    align-self: flex-end;
+  }
+  
+  .summary-stats {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+  
+  .profile-button span {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-wrapper {
+    padding: var(--spacing-md);
+  }
+  
+  .form-container {
+    margin: 0 -var(--spacing-md);
+    border-radius: 0;
+  }
+  
+  .summary-card,
+  .task-container,
+  .payment-card,
+  .hours-card,
+  .hours-summary {
+    margin: 0 -var(--spacing-md);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  
+  .upload-zone {
+    padding: var(--spacing-lg);
+  }
+  
+  .section-title {
+    font-size: var(--font-size-lg);
+  }
+  
+  .card-amount {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* === UTILITIES === */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.d-none {
+  display: none !important;
+}
+
+.d-block {
+  display: block !important;
+}
+
+.d-flex {
+  display: flex !important;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.gap-sm {
+  gap: var(--spacing-sm);
+}
+
+.gap-md {
+  gap: var(--spacing-md);
+}
+
+.gap-lg {
+  gap: var(--spacing-lg);
+}
+
+.mb-0 {
+  margin-bottom: 0 !important;
+}
+
+.mb-sm {
+  margin-bottom: var(--spacing-sm) !important;
+}
+
+.mb-md {
+  margin-bottom: var(--spacing-md) !important;
+}
+
+.mb-lg {
+  margin-bottom: var(--spacing-lg) !important;
+}
+
+.mt-0 {
+  margin-top: 0 !important;
+}
+
+.mt-sm {
+  margin-top: var(--spacing-sm) !important;
+}
+
+.mt-md {
+  margin-top: var(--spacing-md) !important;
+}
+
+.mt-lg {
+  margin-top: var(--spacing-lg) !important;
+}
+
+/* === ANIMATIONS === */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.animate-slideIn {
+  animation: slideIn var(--transition-normal) ease-out;
+}
+
+/* === FOCUS STYLES === */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* === SCROLLBAR STYLES === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-dark);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-light);
+}
+
+/* === PRINT STYLES === */
+@media print {
+  .sidebar,
+  .app-header,
+  .form-modal,
+  .action-button,
+  .task-actions,
+  .payment-actions,
+  .hours-actions {
+    display: none !important;
+  }
+  
+  .main-content {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .content-wrapper {
+    padding: 0 !important;
+  }
+  
+  .summary-card,
+  .task-container,
+  .payment-card,
+  .hours-card {
+    box-shadow: none !important;
+    border: 1px solid var(--color-border) !important;
+    break-inside: avoid;
+  }
+}
+    </style>
 </head>
 <body>
     <!-- Loading Screen -->
-    <div id="loadingScreen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; z-index: 9999;">
-        <div style="text-align: center;">
-            <div style="width: 50px; height: 50px; border: 5px solid #d32f2f; border-top: 5px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
-            <p>Cargando perfil...</p>
+    <div id="loadingScreen" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Cargando perfil...</p>
         </div>
     </div>
 
     <!-- Main Application -->
-    <div id="mainApp" style="display: none;">
-        <div class="container">
+    <div id="mainApp" class="main-app">
+        <div class="app-container">
             <!-- Sidebar -->
-            <div class="sidebar">
+            <aside class="sidebar">
                 <div class="sidebar-header">
-                    <div class="logo">
-                        <img src="IMG/UrbanCoop White.jpeg" alt="Urban Coop" class="logo-img">
+                    <div class="logo-container">
+                        <img src="IMG/UrbanCoop White.jpeg" alt="Urban Coop" class="logo">
                     </div>
-                    <div class="search-box">
+                    <div class="search-container">
                         <input type="text" class="search-input" placeholder="Buscar...">
+                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
                     </div>
-                    
-                    <div class="menu-item">
-                        <span class="menu-item-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <div class="nav-item">
+                        <div class="nav-item-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
                             </svg>
-                        </span>
-                        <span class="menu-item-text">Importantes</span>
-                        <span class="menu-item-count">0</span>
+                        </div>
+                        <span class="nav-item-text">Importantes</span>
+                        <span class="nav-item-badge">0</span>
                     </div>
                     
-                    <div class="menu-item">
-                        <span class="menu-item-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="nav-item">
+                        <div class="nav-item-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M9 11H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h4m6-6h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4m-6-6V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>
-                        </span>
-                        <span class="menu-item-text">Tareas</span>
-                        <span class="menu-item-count">0</span>
+                        </div>
+                        <span class="nav-item-text">Tareas</span>
+                        <span class="nav-item-badge">0</span>
                     </div>
                     
-                    <div class="menu-item">
-                        <span class="menu-item-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="nav-item">
+                        <div class="nav-item-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                                 <polyline points="9,22 9,12 15,12 15,22"></polyline>
                             </svg>
-                        </span>
-                        <span class="menu-item-text">Casa</span>
-                        <span class="menu-item-count">3</span>
+                        </div>
+                        <span class="nav-item-text">Casa</span>
+                        <span class="nav-item-badge">3</span>
                     </div>
-                </div>
-            </div>
+                </nav>
+            </aside>
 
             <!-- Main Content -->
-            <div class="main-content">
+            <main class="main-content">
                 <!-- Header -->
-                <div class="header">
-                    <div class="header-left">
-                        <nav class="header-nav">
-                            <button class="nav-btn active" onclick="showSection('tasks')">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M9 11H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h4m6-6h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4m-6-6V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                </svg>
-                                Tareas
-                            </button>
-                            <button class="nav-btn" onclick="showSection('payments')">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                    <polyline points="14,2 14,8 20,8"></polyline>
-                                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                                    <polyline points="10,9 9,9 8,9"></polyline>
-                                </svg>
-                                Comprobantes
-                            </button>
-                            <button class="nav-btn" onclick="showSection('hours')">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <polyline points="12,6 12,12 16,14"></polyline>
-                                </svg>
-                                Horas Trabajadas
-                            </button>
-                        </nav>
-                    </div>
+                <header class="app-header">
+                    <nav class="header-nav">
+                        <button class="nav-button active" data-section="tasks">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 11H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h4m6-6h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4m-6-6V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Tareas
+                        </button>
+                        <button class="nav-button" data-section="payments">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14,2 14,8 20,8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10,9 9,9 8,9"></polyline>
+                            </svg>
+                            Comprobantes
+                        </button>
+                        <button class="nav-button" data-section="hours">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12,6 12,12 16,14"></polyline>
+                            </svg>
+                            Horas Trabajadas
+                        </button>
+                    </nav>
                     
-                    <div class="header-right">
-                        <div class="profile-menu">
-                            <button class="profile-btn" onclick="toggleProfileMenu()">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="profile-section">
+                        <div class="profile-dropdown">
+                            <button class="profile-button">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                                     <circle cx="12" cy="7" r="4"></circle>
                                 </svg>
                                 <span id="userNameDisplay">Usuario de Prueba</span>
+                                <svg class="dropdown-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6,9 12,15 18,9"></polyline>
+                                </svg>
                             </button>
-                            <div class="profile-dropdown" id="profileDropdown">
-                                <a href="#" onclick="logout()">Cerrar Sesión</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Content Sections -->
-                <div class="content-area">
-                    <!-- Tasks Section -->
-                    <div id="tasks-section" class="section active">
-                        <div class="section-header">
-                            <h2 class="section-title">Mis Tareas</h2>
-                            <div class="task-actions">
-                                <button class="add-btn" onclick="addNewTask()">
+                            <div class="profile-menu" id="profileDropdown">
+                                <button class="profile-menu-item" onclick="logout()">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                        <polyline points="16,17 21,12 16,7"></polyline>
+                                        <line x1="21" y1="12" x2="9" y2="12"></line>
                                     </svg>
-                                    Agregar tarea
+                                    Cerrar Sesión
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </header>
+                
+                <!-- Content Area -->
+                <div class="content-wrapper">
+                    <!-- Tasks Section -->
+                    <section id="tasks-section" class="content-section active">
+                        <div class="section-header">
+                            <h1 class="section-title">Mis Tareas</h1>
+                            <button class="action-button primary" id="addTaskBtn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Agregar Tarea
+                            </button>
+                        </div>
                         
-                        <div class="task-list" id="taskList">
+                        <div class="task-container" id="taskList">
                             <div class="task-item" data-category="trabajo">
-                                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
+                                <div class="task-checkbox-container">
+                                    <input type="checkbox" class="task-checkbox" id="task-1">
+                                    <label for="task-1" class="checkbox-label"></label>
+                                </div>
                                 <span class="task-text">Completar registro de horas</span>
                                 <div class="task-actions">
-                                    <button class="star-btn" onclick="toggleFavorite(this)" title="Marcar como importante">
+                                    <button class="task-action-btn star-btn" title="Marcar como importante">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
                                         </svg>
                                     </button>
-                                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
+                                    <button class="task-action-btn delete-btn" title="Eliminar tarea">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="3,6 5,6 21,6"></polyline>
                                             <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
@@ -180,67 +1635,64 @@ $can_access = true;
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
                     <!-- Payments Section -->
-                    <div id="payments-section" class="section">
+                    <section id="payments-section" class="content-section">
                         <div class="section-header">
-                            <h2 class="section-title">Comprobantes de Pago</h2>
-                            <div class="payment-actions">
-                                <button class="add-btn" onclick="showUploadForm()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7,10 12,15 17,10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                    Subir Comprobante
-                                </button>
-                                <button class="add-btn secondary-btn" onclick="showBalanceForm()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="12" y1="1" x2="12" y2="23"></line>
-                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                    </svg>
-                                    Agregar Saldo
-                                </button>
-                            </div>
+                            <h1 class="section-title">Comprobantes de Pago</h1>
+                            <button class="action-button primary" id="uploadPaymentBtn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7,10 12,15 17,10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Subir Comprobante
+                            </button>
                         </div>
 
                         <!-- Payment Summary Cards -->
-                        <div class="payment-summary-cards">
-                            <div class="summary-card balance-card">
+                        <div class="summary-grid">
+                            <div class="summary-card balance">
                                 <div class="card-header">
-                                    <h3>Saldo Actual</h3>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                                        <line x1="1" y1="10" x2="23" y2="10"></line>
-                                    </svg>
+                                    <div class="card-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                            <line x1="1" y1="10" x2="23" y2="10"></line>
+                                        </svg>
+                                    </div>
+                                    <h3 class="card-title">Pago Actual</h3>
                                 </div>
                                 <div class="card-amount" id="currentBalance">$15.000</div>
-                                <div class="card-status" id="paymentStatus">Cargando...</div>
+                                <div class="card-status" id="paymentStatus">Al día</div>
                             </div>
 
-                            <div class="summary-card fee-card">
+                            <div class="summary-card fee">
                                 <div class="card-header">
-                                    <h3>Cuota Mensual</h3>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="12" y1="1" x2="12" y2="23"></line>
-                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                    </svg>
+                                    <div class="card-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="card-title">Cuota Mensual</h3>
                                 </div>
                                 <div class="card-amount" id="monthlyFee">$22.000</div>
                                 <div class="card-subtitle">Cuota fija mensual</div>
                             </div>
 
-                            <div class="summary-card progress-card">
+                            <div class="summary-card progress">
                                 <div class="card-header">
-                                    <h3>Progreso de Pago</h3>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-                                    </svg>
+                                    <div class="card-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="card-title">Progreso de Pago</h3>
                                 </div>
                                 <div class="progress-container">
                                     <div class="progress-bar">
-                                        <div class="progress-fill" id="progressFill" style="width: 68%"></div>
+                                        <div class="progress-fill" id="progressFill" data-progress="68"></div>
                                     </div>
                                     <div class="progress-text" id="progressText">68%</div>
                                 </div>
@@ -248,29 +1700,41 @@ $can_access = true;
                             </div>
                         </div>
 
-                        <div id="paymentMessages"></div>
+                        <div id="paymentMessages" class="messages-container"></div>
 
                         <!-- Upload Form -->
-                        <div id="upload-form" style="display: none;">
+                        <div id="upload-form" class="form-modal">
                             <div class="form-container">
-                                <form id="uploadPaymentForm" enctype="multipart/form-data" onsubmit="submitPaymentForm(event)">
-                                    <input type="hidden" name="user_id" id="uploadUserId" value="<?php echo $user_id; ?>">
-                                    
-                                    <div class="upload-area" id="uploadArea">
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                            <polyline points="7,10 12,15 17,10"></polyline>
-                                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                                <div class="form-header">
+                                    <h2>Subir Comprobante de Pago</h2>
+                                    <button class="close-btn" id="closeUploadForm">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
                                         </svg>
-                                        <p>Arrastra y suelta tu archivo aquí o haz clic para seleccionar</p>
-                                        <p style="font-size: 12px; color: #666; margin-top: 5px;">PDF, JPG, PNG - Máximo 5MB</p>
+                                    </button>
+                                </div>
+                                <form id="uploadPaymentForm" enctype="multipart/form-data">
+                                    <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                    
+                                    <div class="upload-zone" id="uploadArea">
+                                        <div class="upload-icon">
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                <polyline points="7,10 12,15 17,10"></polyline>
+                                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                                            </svg>
+                                        </div>
+                                        <p class="upload-text">Arrastra y suelta tu archivo aquí</p>
+                                        <p class="upload-subtext">o haz clic para seleccionar</p>
+                                        <p class="upload-info">PDF, JPG, PNG - Máximo 5MB</p>
                                         <input type="file" name="payment_file" id="payment_file" accept=".pdf,.jpg,.jpeg,.png" required>
                                     </div>
                                     
-                                    <div class="form-row">
+                                    <div class="form-grid">
                                         <div class="form-group">
-                                            <label>Mes de Pago *</label>
-                                            <select name="payment_month" id="payment_month" required>
+                                            <label class="form-label">Mes de Pago *</label>
+                                            <select name="payment_month" class="form-select" required>
                                                 <option value="">Seleccionar mes</option>
                                                 <option value="01">Enero</option>
                                                 <option value="02">Febrero</option>
@@ -287,8 +1751,8 @@ $can_access = true;
                                             </select>
                                         </div>
                                         <div class="form-group">
-                                            <label>Año *</label>
-                                            <select name="payment_year" id="payment_year" required>
+                                            <label class="form-label">Año *</label>
+                                            <select name="payment_year" class="form-select" required>
                                                 <option value="">Seleccionar año</option>
                                                 <option value="2024">2024</option>
                                                 <option value="2025">2025</option>
@@ -297,84 +1761,55 @@ $can_access = true;
                                     </div>
 
                                     <div class="form-group">
-                                        <label>Importe del Pago *</label>
-                                        <div class="amount-input-container">
-                                            <span class="currency-symbol">$</span>
-                                            <input type="number" name="payment_amount" id="payment_amount" 
+                                        <label class="form-label">Importe del Pago *</label>
+                                        <div class="amount-input">
+                                            <span class="amount-symbol">$</span>
+                                            <input type="number" name="payment_amount" class="form-input amount" 
                                                    min="1000" max="1000000" step="1" 
-                                                   placeholder="22000" 
-                                                   required>
+                                                   placeholder="22000" required>
                                         </div>
-                                        <small style="color: #666;">Ingrese el monto sin puntos ni comas</small>
+                                        <small class="form-hint">Ingrese el monto sin puntos ni comas</small>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label>Descripción (opcional)</label>
-                                        <textarea name="payment_description" id="payment_description" rows="3" placeholder="Agregar notas adicionales..."></textarea>
+                                        <label class="form-label">Descripción (opcional)</label>
+                                        <textarea name="payment_description" class="form-textarea" 
+                                                  rows="3" placeholder="Agregar notas adicionales..."></textarea>
                                     </div>
                                     
-                                    <div style="display: flex; gap: 10px;">
-                                        <button type="submit" class="submit-btn">Subir Comprobante</button>
-                                        <button type="button" class="submit-btn" onclick="hideUploadForm()" style="background: #666;">Cancelar</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Balance Form -->
-                        <div id="balance-form" style="display: none;">
-                            <div class="form-container">
-                                <form id="balanceForm" onsubmit="submitBalanceForm(event)">
-                                    <h3 style="margin-bottom: 20px; color: #d32f2f;">Agregar Saldo a la Cuenta</h3>
-                                    <div class="form-group">
-                                        <label>Monto a Agregar *</label>
-                                        <div class="amount-input-container">
-                                            <span class="currency-symbol">$</span>
-                                            <input type="number" name="balance_amount" id="balance_amount" 
-                                                   min="100" max="500000" step="1" 
-                                                   placeholder="22000" 
-                                                   required>
-                                        </div>
-                                        <small style="color: #666;">Monto entre $100 y $500.000</small>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label>Descripción (opcional)</label>
-                                        <textarea name="balance_description" id="balance_description" rows="2" placeholder="Motivo del ingreso de saldo..."></textarea>
-                                    </div>
-                                    
-                                    <div style="display: flex; gap: 10px;">
-                                        <button type="submit" class="submit-btn">Agregar Saldo</button>
-                                        <button type="button" class="submit-btn" onclick="hideBalanceForm()" style="background: #666;">Cancelar</button>
+                                    <div class="form-actions">
+                                        <button type="submit" class="action-button primary">Subir Comprobante</button>
+                                        <button type="button" class="action-button secondary" id="cancelUpload">Cancelar</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                         
-                        <div class="file-list" id="paymentsList">
-                            <!-- Se muestra ejemplo de datos -->
-                            <div class="payment-item" style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 15px; background: white;">
-                                <div style="display: flex; align-items: center; gap: 15px;">
-                                    <div class="file-info">
-                                        <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Comprobante Septiembre 2024</h3>
-                                        <p style="margin: 0 0 4px 0; color: #666; font-size: 14px;">Importe: <strong style="color: #2e7d32;">$15.000</strong></p>
-                                        <p style="margin: 0 0 4px 0; color: #666; font-size: 14px;">Subido el 15/09/2024 14:30 • 1.2 MB</p>
+                        <div class="payments-list" id="paymentsList">
+                            <!-- Ejemplo de comprobante -->
+                            <div class="payment-card">
+                                <div class="payment-info">
+                                    <h3 class="payment-title">Comprobante Septiembre 2024</h3>
+                                    <div class="payment-details">
+                                        <span class="payment-amount">$15.000</span>
+                                        <span class="payment-date">15/09/2024 14:30</span>
+                                        <span class="payment-size">1.2 MB</span>
                                     </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase; background: #fff3e0; color: #f57c00;">Pendiente</span>
-                                    <button onclick="alert('Función en desarrollo')" style="padding: 8px 16px; background: #2196f3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Ver</button>
+                                <div class="payment-actions">
+                                    <span class="payment-status pending">Pendiente</span>
+                                    <button class="action-button secondary small">Ver</button>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
                     <!-- Hours Section -->
-                    <div id="hours-section" class="section">
+                    <section id="hours-section" class="content-section">
                         <div class="section-header">
-                            <h2 class="section-title">Registro de Horas</h2>
-                            <button class="add-btn" onclick="showHoursForm()">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <h1 class="section-title">Registro de Horas</h1>
+                            <button class="action-button primary" id="addHoursBtn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
@@ -383,44 +1818,60 @@ $can_access = true;
                         </div>
 
                         <div class="hours-summary">
-                            <h3>Resumen del mes actual</h3>
-                            <p>Total de horas registradas: <strong id="totalHoursMonth">32 horas</strong></p>
-                            <p>Mes: <span id="currentMonthDisplay">Septiembre 2024</span></p>
+                            <h3 class="summary-title">Resumen del mes actual</h3>
+                            <div class="summary-stats">
+                                <div class="stat">
+                                    <span class="stat-label">Total de horas:</span>
+                                    <span class="stat-value" id="totalHoursMonth">32 horas</span>
+                                </div>
+                                <div class="stat">
+                                    <span class="stat-label">Mes:</span>
+                                    <span class="stat-value" id="currentMonthDisplay">Septiembre 2024</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div id="hours-form" style="display: none;">
+                        <div id="hours-form" class="form-modal">
                             <div class="form-container">
-                                <div id="hoursMessages"></div>
+                                <div class="form-header">
+                                    <h2>Registrar Horas Trabajadas</h2>
+                                    <button class="close-btn" id="closeHoursForm">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </svg>
+                                    </button>
+                                </div>
                                 
-                                <form id="hoursForm" onsubmit="submitHoursForm(event)">
-                                    <input type="hidden" name="user_id" id="hoursUserId" value="<?php echo $user_id; ?>">
+                                <div id="hoursMessages" class="messages-container"></div>
+                                
+                                <form id="hoursForm">
+                                    <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
                                     
-                                    <div class="form-row">
+                                    <div class="form-grid">
                                         <div class="form-group">
-                                            <label>Fecha de Trabajo *</label>
-                                            <input type="date" name="work_date" id="work_date" 
-                                                   max="<?php echo date('Y-m-d'); ?>" 
-                                                   required>
+                                            <label class="form-label">Fecha de Trabajo *</label>
+                                            <input type="date" name="work_date" class="form-input" 
+                                                   max="<?php echo date('Y-m-d'); ?>" required>
                                         </div>
                                         <div class="form-group">
-                                            <label>Horas Trabajadas *</label>
-                                            <input type="number" name="hours_worked" id="hours_worked" 
+                                            <label class="form-label">Horas Trabajadas *</label>
+                                            <input type="number" name="hours_worked" class="form-input" 
                                                    min="0.5" max="24" step="0.5" 
-                                                   placeholder="8.0" 
-                                                   required>
+                                                   placeholder="8.0" required>
                                         </div>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label>Descripción del Trabajo *</label>
-                                        <textarea name="description" id="description" rows="4" 
+                                        <label class="form-label">Descripción del Trabajo *</label>
+                                        <textarea name="description" class="form-textarea" rows="4" 
                                                   placeholder="Describe las actividades realizadas durante el día..." 
                                                   required></textarea>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label>Tipo de Trabajo *</label>
-                                        <select name="work_type" id="work_type" required>
+                                        <label class="form-label">Tipo de Trabajo *</label>
+                                        <select name="work_type" class="form-select" required>
                                             <option value="">Seleccionar tipo</option>
                                             <option value="desarrollo">Desarrollo</option>
                                             <option value="reunion">Reuniones</option>
@@ -433,948 +1884,34 @@ $can_access = true;
                                         </select>
                                     </div>
                                     
-                                    <div style="display: flex; gap: 10px;">
-                                        <button type="submit" class="submit-btn">Registrar Horas</button>
-                                        <button type="button" class="submit-btn" onclick="hideHoursForm()" style="background: #666;">Cancelar</button>
+                                    <div class="form-actions">
+                                        <button type="submit" class="action-button primary">Registrar Horas</button>
+                                        <button type="button" class="action-button secondary" id="cancelHours">Cancelar</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                         
                         <div class="hours-list" id="hoursList">
-                            <!-- Ejemplo de datos -->
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 15px; background: white;">
-                                <div style="flex-grow: 1;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">14/09/2024 - 8 horas</h3>
-                                    <p style="margin: 0 0 8px 0; font-weight: 500; color: #d32f2f;">Tipo: Desarrollo</p>
-                                    <p style="margin: 0 0 12px 0; color: #333; line-height: 1.5;">Desarrollo de nuevas funcionalidades para el sistema de gestión cooperativa.</p>
-                                    <small style="color: #666; font-size: 13px;">Registrado el 14/09/2024 18:30</small>
+                            <!-- Ejemplo de registro -->
+                            <div class="hours-card">
+                                <div class="hours-info">
+                                    <h3 class="hours-title">14/09/2024 - 8 horas</h3>
+                                    <div class="hours-type">Desarrollo</div>
+                                    <p class="hours-description">Desarrollo de nuevas funcionalidades para el sistema de gestión cooperativa.</p>
+                                    <small class="hours-date">Registrado el 14/09/2024 18:30</small>
                                 </div>
-                                <button onclick="alert('Función en desarrollo')" style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-left: 20px; font-weight: 500;">Eliminar</button>
+                                <div class="hours-actions">
+                                    <button class="action-button danger small">Eliminar</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
-            </div>
+            </main>
         </div>
     </div>
 
-    <!-- Estilos incluidos -->
-    <style>
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-        background-color: #f5f5f5;
-    }
-
-    .container {
-        display: flex;
-        height: 100vh;
-    }
-
-    .sidebar {
-        width: 250px;
-        background: #2c3e50;
-        color: white;
-        padding: 20px;
-        overflow-y: auto;
-    }
-
-    .logo-img {
-        width: 100%;
-        max-width: 150px;
-        margin-bottom: 20px;
-    }
-
-    .search-input {
-        width: 100%;
-        padding: 10px;
-        border: none;
-        border-radius: 5px;
-        margin-bottom: 20px;
-        box-sizing: border-box;
-    }
-
-    .menu-item {
-        display: flex;
-        align-items: center;
-        padding: 12px 8px;
-        margin-bottom: 8px;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .menu-item:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .menu-item-icon {
-        margin-right: 12px;
-    }
-
-    .menu-item-text {
-        flex-grow: 1;
-    }
-
-    .menu-item-count {
-        background-color: #e74c3c;
-        color: white;
-        border-radius: 12px;
-        padding: 2px 8px;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    .main-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .header {
-        background: white;
-        padding: 15px 30px;
-        border-bottom: 1px solid #e0e0e0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .header-nav {
-        display: flex;
-        gap: 10px;
-    }
-
-    .nav-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 16px;
-        border: none;
-        background: transparent;
-        color: #666;
-        cursor: pointer;
-        border-radius: 6px;
-        transition: all 0.2s;
-        font-size: 14px;
-    }
-
-    .nav-btn.active,
-    .nav-btn:hover {
-        background: #f0f0f0;
-        color: #d32f2f;
-    }
-
-    .profile-menu {
-        position: relative;
-    }
-
-    .profile-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 16px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        border-radius: 6px;
-        transition: background-color 0.2s;
-    }
-
-    .profile-btn:hover {
-        background: #f0f0f0;
-    }
-
-    .profile-dropdown {
-        position: absolute;
-        top: 100%;
-        right: 0;
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        padding: 8px 0;
-        min-width: 150px;
-        display: none;
-        z-index: 1000;
-    }
-
-    .profile-dropdown.show {
-        display: block;
-    }
-
-    .profile-dropdown a {
-        display: block;
-        padding: 8px 16px;
-        color: #333;
-        text-decoration: none;
-        transition: background-color 0.2s;
-    }
-
-    .profile-dropdown a:hover {
-        background: #f0f0f0;
-    }
-
-    .content-area {
-        flex: 1;
-        padding: 30px;
-        overflow-y: auto;
-    }
-
-    .section {
-        display: none;
-    }
-
-    .section.active {
-        display: block;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-    }
-
-    .section-title {
-        font-size: 24px;
-        font-weight: 600;
-        color: #333;
-        margin: 0;
-    }
-
-    .add-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 20px;
-        background: #d32f2f;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-
-    .add-btn:hover {
-        background: #b71c1c;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
-    }
-
-    .secondary-btn {
-        background: #2196f3 !important;
-    }
-
-    .secondary-btn:hover {
-        background: #1976d2 !important;
-    }
-
-    /* Payment Summary Cards */
-    .payment-summary-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-
-    .summary-card {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        border-left: 4px solid #d32f2f;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .summary-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    }
-
-    .summary-card .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .summary-card .card-header h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-        color: #666;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .summary-card .card-header svg {
-        color: #d32f2f;
-        opacity: 0.7;
-    }
-
-    .summary-card .card-amount {
-        font-size: 32px;
-        font-weight: 700;
-        color: #333;
-        margin-bottom: 8px;
-        line-height: 1;
-    }
-
-    .balance-card .card-amount {
-        color: #2e7d32;
-    }
-
-    .fee-card .card-amount {
-        color: #d32f2f;
-    }
-
-    .summary-card .card-status,
-    .summary-card .card-subtitle {
-        font-size: 14px;
-        color: #666;
-        margin: 0;
-    }
-
-    .progress-card .progress-container {
-        margin-bottom: 12px;
-    }
-
-    .progress-bar {
-        width: 100%;
-        height: 12px;
-        background: #f0f0f0;
-        border-radius: 6px;
-        overflow: hidden;
-        margin-bottom: 8px;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #4caf50 0%, #2e7d32 100%);
-        border-radius: 6px;
-        transition: width 0.6s ease;
-        position: relative;
-    }
-
-    .progress-fill::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
-        animation: shimmer 2s infinite;
-    }
-
-    @keyframes shimmer {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(100%); }
-    }
-
-    .progress-text {
-        font-size: 18px;
-        font-weight: 600;
-        color: #333;
-        text-align: center;
-    }
-
-    /* Form Styles */
-    .form-container {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        margin-bottom: 24px;
-        border-left: 4px solid #d32f2f;
-    }
-
-    .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin-bottom: 20px;
-    }
-
-    .form-group {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: 600;
-        color: #333;
-        font-size: 14px;
-    }
-
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-        width: 100%;
-        padding: 12px 16px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        font-size: 14px;
-        transition: all 0.3s ease;
-        box-sizing: border-box;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
-        outline: none;
-        border-color: #d32f2f;
-        box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1);
-    }
-
-    .amount-input-container {
-        position: relative;
-        display: flex;
-        align-items: center;
-    }
-
-    .currency-symbol {
-        position: absolute;
-        left: 15px;
-        font-size: 18px;
-        font-weight: 600;
-        color: #666;
-        z-index: 1;
-    }
-
-    .amount-input-container input {
-        padding-left: 35px !important;
-        font-size: 16px;
-        font-weight: 600;
-    }
-
-    .upload-area {
-        border: 2px dashed #d0d0d0;
-        border-radius: 12px;
-        padding: 40px 20px;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin-bottom: 24px;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .upload-area:hover {
-        border-color: #d32f2f;
-        background: #fafafa;
-    }
-
-    .upload-area input[type="file"] {
-        position: absolute;
-        opacity: 0;
-        width: 100%;
-        height: 100%;
-        cursor: pointer;
-    }
-
-    .upload-area p {
-        margin: 10px 0 0 0;
-        color: #666;
-    }
-
-    .upload-area svg {
-        color: #d32f2f;
-        margin-bottom: 16px;
-    }
-
-    .submit-btn {
-        padding: 12px 24px;
-        background: #d32f2f;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .submit-btn:hover {
-        background: #b71c1c;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
-    }
-
-    /* Task Styles */
-    .task-list {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        overflow: hidden;
-    }
-
-    .task-item {
-        display: flex;
-        align-items: center;
-        padding: 16px 20px;
-        border-bottom: 1px solid #f0f0f0;
-        transition: background-color 0.2s;
-    }
-
-    .task-item:last-child {
-        border-bottom: none;
-    }
-
-    .task-item:hover {
-        background: #f9f9f9;
-    }
-
-    .task-item.completed {
-        opacity: 0.6;
-    }
-
-    .task-item.completed .task-text {
-        text-decoration: line-through;
-    }
-
-    .task-checkbox {
-        margin-right: 15px;
-        width: 18px;
-        height: 18px;
-    }
-
-    .task-text {
-        flex-grow: 1;
-        font-size: 15px;
-    }
-
-    .task-actions {
-        display: flex;
-        gap: 8px;
-    }
-
-    .star-btn,
-    .delete-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 4px;
-        transition: background-color 0.2s;
-    }
-
-    .star-btn:hover {
-        background: #fff3e0;
-        color: #ff9800;
-    }
-
-    .star-btn.favorite {
-        color: #ff9800;
-    }
-
-    .delete-btn:hover {
-        background: #ffebee;
-        color: #f44336;
-    }
-
-    /* Hours Summary */
-    .hours-summary {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        margin-bottom: 30px;
-        border-left: 4px solid #2196f3;
-    }
-
-    .hours-summary h3 {
-        margin: 0 0 16px 0;
-        color: #333;
-        font-size: 18px;
-    }
-
-    .hours-summary p {
-        margin: 8px 0;
-        color: #666;
-    }
-
-    /* Alert styles */
-    .alert {
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        font-size: 0.9rem;
-    }
-
-    .alert-success {
-        background-color: #e8f5e8;
-        color: #2e7d32;
-        border-left: 4px solid #4caf50;
-    }
-
-    .alert-error {
-        background-color: #ffebee;
-        color: #c62828;
-        border-left: 4px solid #e53935;
-    }
-
-    /* Responsive design */
-    @media (max-width: 768px) {
-        .container {
-            flex-direction: column;
-        }
-
-        .sidebar {
-            width: 100%;
-            height: auto;
-        }
-
-        .payment-summary-cards {
-            grid-template-columns: 1fr;
-            gap: 16px;
-        }
-
-        .form-row {
-            grid-template-columns: 1fr;
-            gap: 16px;
-        }
-
-        .header {
-            padding: 15px 20px;
-        }
-
-        .content-area {
-            padding: 20px;
-        }
-
-        .summary-card {
-            padding: 20px;
-        }
-
-        .summary-card .card-amount {
-            font-size: 28px;
-        }
-    }
-    </style>
-
-    <script>
-    // Variables globales simples (SIN JWT)
-    let currentUser = {
-        id: <?php echo $user_id; ?>,
-        name: 'Usuario de Prueba',
-        is_admin: false
-    };
-    let isUserDataLoaded = false;
-
-    // INICIALIZACIÓN SIMPLIFICADA
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('=== PERFIL SIN JWT INITIALIZATION ===');
-        
-        // Ocultar loading y mostrar app directamente
-        hideLoadingScreen();
-        document.getElementById('mainApp').style.display = 'block';
-        
-        // Configurar handlers de formularios
-        setupFormHandlers();
-        updateTaskCount();
-        
-        isUserDataLoaded = true;
-        
-        // Simular carga exitosa
-        showMessage('paymentMessages', 'Sistema en modo de prueba - Los datos mostrados son de ejemplo', 'success');
-    });
-
-    function hideLoadingScreen() {
-        const loadingScreen = document.getElementById('loadingScreen');
-        if (loadingScreen) {
-            loadingScreen.style.display = 'none';
-        }
-    }
-
-    function logout() {
-        if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
-            alert('Función de logout en desarrollo');
-            // window.location.href = 'index.php';
-        }
-    }
-
-    function showMessage(containerId, message, type) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        
-        const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
-        
-        container.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
-        
-        setTimeout(() => {
-            container.innerHTML = '';
-        }, 5000);
-    }
-
-    // Funciones de navegación
-    function showSection(sectionName) {
-        document.querySelectorAll('.section').forEach(section => {
-            section.classList.remove('active');
-        });
-        
-        document.querySelectorAll('.nav-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        
-        document.getElementById(sectionName + '-section').classList.add('active');
-        event.target.closest('.nav-btn').classList.add('active');
-    }
-
-    function toggleProfileMenu() {
-        const dropdown = document.getElementById('profileDropdown');
-        dropdown.classList.toggle('show');
-    }
-
-    // Cerrar dropdown cuando se hace clic fuera
-    document.addEventListener('click', function(event) {
-        const profileMenu = document.querySelector('.profile-menu');
-        if (!profileMenu.contains(event.target)) {
-            const dropdown = document.getElementById('profileDropdown');
-            if (dropdown) {
-                dropdown.classList.remove('show');
-            }
-        }
-    });
-
-    // Funciones de tareas
-    function toggleTask(checkbox) {
-        const taskItem = checkbox.closest('.task-item');
-        if (checkbox.checked) {
-            taskItem.classList.add('completed');
-        } else {
-            taskItem.classList.remove('completed');
-        }
-        updateTaskCount();
-    }
-
-    function addNewTask() {
-        const taskText = prompt('Ingresa el texto de la nueva tarea:');
-        if (taskText && taskText.trim()) {
-            const category = prompt('Selecciona la categoría (trabajo/casa):') || 'trabajo';
-            
-            const taskList = document.getElementById('taskList');
-            const newTask = document.createElement('div');
-            newTask.className = 'task-item';
-            newTask.setAttribute('data-category', category);
-            newTask.innerHTML = `
-                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
-                <span class="task-text">${taskText.trim()}</span>
-                <div class="task-actions">
-                    <button class="star-btn" onclick="toggleFavorite(this)" title="Marcar como importante">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
-                        </svg>
-                    </button>
-                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3,6 5,6 21,6"></polyline>
-                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
-                        </svg>
-                    </button>
-                </div>
-            `;
-            taskList.appendChild(newTask);
-            updateTaskCount();
-        }
-    }
-
-    function toggleFavorite(button) {
-        const taskItem = button.closest('.task-item');
-        const svg = button.querySelector('svg');
-        
-        if (button.classList.contains('favorite')) {
-            button.classList.remove('favorite');
-            svg.setAttribute('fill', 'none');
-        } else {
-            button.classList.add('favorite');
-            svg.setAttribute('fill', 'currentColor');
-        }
-        updateTaskCount();
-    }
-
-    function deleteTask(button) {
-        if (confirm('¿Estás seguro de que quieres eliminar esta tarea?')) {
-            const taskItem = button.closest('.task-item');
-            taskItem.remove();
-            updateTaskCount();
-        }
-    }
-
-    function updateTaskCount() {
-        const totalTasks = document.querySelectorAll('.task-item').length;
-        const completedTasks = document.querySelectorAll('.task-item.completed').length;
-        const remainingTasks = totalTasks - completedTasks;
-        const favoriteTasks = document.querySelectorAll('.star-btn.favorite').length;
-        const casaTasks = document.querySelectorAll('.task-item[data-category="casa"]').length;
-        
-        // Actualizar contadores en sidebar
-        const menuItems = document.querySelectorAll('.menu-item .menu-item-count');
-        if (menuItems[0]) menuItems[0].textContent = favoriteTasks;
-        if (menuItems[1]) menuItems[1].textContent = totalTasks;
-        if (menuItems[2]) menuItems[2].textContent = casaTasks;
-    }
-
-    // Funciones de formularios
-    function showUploadForm() {
-        document.getElementById('upload-form').style.display = 'block';
-        document.getElementById('balance-form').style.display = 'none';
-    }
-
-    function hideUploadForm() {
-        document.getElementById('upload-form').style.display = 'none';
-    }
-
-    function showBalanceForm() {
-        document.getElementById('balance-form').style.display = 'block';
-        document.getElementById('upload-form').style.display = 'none';
-    }
-
-    function hideBalanceForm() {
-        document.getElementById('balance-form').style.display = 'none';
-    }
-
-    function showHoursForm() {
-        document.getElementById('hours-form').style.display = 'block';
-        document.getElementById('hours-form').scrollIntoView({ behavior: 'smooth' });
-    }
-
-    function hideHoursForm() {
-        document.getElementById('hours-form').style.display = 'none';
-        document.getElementById('hoursForm').reset();
-    }
-
-    // Funciones de envío de formularios (SIMULADAS)
-    function submitPaymentForm(event) {
-        event.preventDefault();
-        
-        const form = event.target;
-        const month = form.payment_month.value;
-        const year = form.payment_year.value;
-        const amount = form.payment_amount.value;
-        const file = form.payment_file.files[0];
-        
-        if (!file || !month || !year || !amount) {
-            showMessage('paymentMessages', 'Por favor completa todos los campos requeridos', 'error');
-            return;
-        }
-        
-        // Simular envío exitoso
-        showMessage('paymentMessages', 'Comprobante subido exitosamente (simulado). Pendiente de aprobación.', 'success');
-        hideUploadForm();
-        form.reset();
-    }
-
-    function submitBalanceForm(event) {
-        event.preventDefault();
-        
-        const form = event.target;
-        const amount = parseFloat(form.balance_amount.value);
-        
-        if (!amount || amount < 100) {
-            showMessage('paymentMessages', 'Ingrese un monto válido', 'error');
-            return;
-        }
-        
-        if (!confirm(`¿Estás seguro de agregar ${amount.toLocaleString()} a tu saldo?`)) {
-            return;
-        }
-        
-        // Simular agregado de saldo
-        const currentBalance = document.getElementById('currentBalance');
-        const newBalance = 15000 + amount;
-        currentBalance.textContent = `${newBalance.toLocaleString()}`;
-        
-        // Actualizar progreso
-        const progress = Math.min((newBalance / 22000) * 100, 100);
-        document.getElementById('progressFill').style.width = progress + '%';
-        document.getElementById('progressText').textContent = Math.round(progress) + '%';
-        
-        showMessage('paymentMessages', `Saldo agregado exitosamente (simulado). Nuevo saldo: ${newBalance.toLocaleString()}`, 'success');
-        hideBalanceForm();
-        form.reset();
-    }
-
-    function submitHoursForm(event) {
-        event.preventDefault();
-        
-        const form = event.target;
-        const workDate = form.work_date.value;
-        const hours = form.hours_worked.value;
-        const description = form.description.value;
-        const workType = form.work_type.value;
-        
-        if (!workDate || !hours || !description || !workType) {
-            showMessage('hoursMessages', 'Por favor completa todos los campos requeridos', 'error');
-            return;
-        }
-        
-        // Simular registro exitoso
-        showMessage('hoursMessages', 'Horas registradas exitosamente (simulado)', 'success');
-        hideHoursForm();
-        form.reset();
-        
-        // Actualizar total de horas
-        const currentTotal = parseFloat(document.getElementById('totalHoursMonth').textContent) || 0;
-        const newTotal = currentTotal + parseFloat(hours);
-        document.getElementById('totalHoursMonth').textContent = newTotal + ' horas';
-    }
-
-    function setupFormHandlers() {
-        // Configurar drag & drop para archivos
-        const uploadArea = document.getElementById('uploadArea');
-        if (uploadArea) {
-            uploadArea.addEventListener('click', function() {
-                this.querySelector('input[type="file"]').click();
-            });
-
-            uploadArea.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                this.style.borderColor = '#d32f2f';
-                this.style.backgroundColor = '#fafafa';
-            });
-
-            uploadArea.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                this.style.borderColor = '#ddd';
-                this.style.backgroundColor = 'white';
-            });
-
-            uploadArea.addEventListener('drop', function(e) {
-                e.preventDefault();
-                this.style.borderColor = '#ddd';
-                this.style.backgroundColor = 'white';
-                
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    this.querySelector('input[type="file"]').files = files;
-                    this.querySelector('p').textContent = files[0].name;
-                }
-            });
-
-            // Mostrar nombre del archivo seleccionado
-            const fileInput = uploadArea.querySelector('input[type="file"]');
-            fileInput.addEventListener('change', function() {
-                const fileName = this.files[0]?.name || 'Ningún archivo seleccionado';
-                uploadArea.querySelector('p').textContent = fileName;
-            });
-        }
-    }
-
-    console.log('Sistema cargado en modo de prueba - Funciones principales disponibles');
-    </script>
+    <script src="JSS/perfil.js"></script>
 </body>
 </html>

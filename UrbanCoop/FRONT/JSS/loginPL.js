@@ -10,7 +10,7 @@ function toggleTheme() {
 
 themeToggle.addEventListener('click', toggleTheme);
 
-// *** FUNCIÓN CRÍTICA: isSessionValid() - ESTABA FALTANDO ***
+// * FUNCIÓN CRÍTICA: isSessionValid() - ESTABA FALTANDO *
 function isSessionValid() {
     const userData = localStorage.getItem('user_data');
     const loginTime = localStorage.getItem('login_time');
@@ -48,14 +48,14 @@ function isSessionValid() {
     }
 }
 
-// *** FUNCIÓN PARA LIMPIAR SESIÓN ***
+// * FUNCIÓN PARA LIMPIAR SESIÓN *
 function clearSession() {
     localStorage.removeItem('user_data');
     localStorage.removeItem('login_time');
     console.log('Sesión limpiada');
 }
 
-// *** FUNCIÓN PARA OBTENER DATOS DEL USUARIO ***
+// * FUNCIÓN PARA OBTENER DATOS DEL USUARIO *
 function getCurrentUser() {
     if (!isSessionValid()) {
         return null;
@@ -74,6 +74,11 @@ function getCurrentUser() {
 // Message functions
 function showMessage(message, type) {
     const messageArea = document.getElementById('message-area');
+    if (!messageArea) {
+        console.warn('Message area element not found');
+        return;
+    }
+    
     const messageClass = type === 'error' ? 'error-message' : 'success-message';
     
     messageArea.innerHTML = `<div class="${messageClass}">${message}</div>`;
@@ -86,6 +91,11 @@ function showMessage(message, type) {
 
 function setButtonLoading(loading) {
     const button = document.getElementById('loginButton');
+    if (!button) {
+        console.warn('Login button element not found');
+        return;
+    }
+    
     if (loading) {
         button.disabled = true;
         button.innerHTML = '<span class="loading"></span>Iniciando sesión...';
@@ -95,8 +105,26 @@ function setButtonLoading(loading) {
     }
 }
 
+// Función para determinar la URL base correcta
+function getApiBaseUrl() {
+    // Obtener la URL actual de la página
+    const currentLocation = window.location;
+    const protocol = currentLocation.protocol; // http: o https:
+    const hostname = currentLocation.hostname; // localhost o tu dominio
+    const port = currentLocation.port; // puerto si existe
+    
+    // Construir la URL base
+    let baseUrl = `${protocol}//${hostname}`;
+    if (port && port !== '80' && port !== '443') {
+        baseUrl += `:${port}`;
+    }
+    
+    // Agregar la ruta al API
+    return `${baseUrl}/URBANCOOP/APIS/API_Usuarios.php`;
+}
+
 // Form functionality
-document.getElementById('loginForm').addEventListener('submit', function(e) {
+document.getElementById('loginForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
     
     const form = e.target;
@@ -127,36 +155,47 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         password: password
     };
     
-    console.log('Enviando datos:', data);
+    // Obtener la URL del API dinámicamente
+    const apiUrl = `${getApiBaseUrl()}?action=login`;
     
-    fetch('http://localhost/URBANCOOP/APIS/API_Usuarios.php?action=login', {
+    console.log('=== API REQUEST DEBUG ===');
+    console.log('API URL:', apiUrl);
+    console.log('Enviando datos:', data);
+    console.log('Current location:', window.location.href);
+    console.log('========================');
+    
+    fetch(apiUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
         },
         body: JSON.stringify(data)
     })
     .then(response => {
+        console.log('=== API RESPONSE DEBUG ===');
         console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
+        console.log('Response statusText:', response.statusText);
+        console.log('Response URL:', response.url);
+        console.log('Response headers:', [...response.headers.entries()]);
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - URL: ${response.url}`);
         }
         
         return response.text();
     })
     .then(text => {
-        console.log('Response text:', text);
+        console.log('Raw response:', text);
         
         let data;
         try {
             data = JSON.parse(text);
         } catch (e) {
-            console.error('Error parsing JSON:', e);
+            console.error('JSON Parse Error:', e);
             console.error('Respuesta recibida:', text);
-            throw new Error('Respuesta del servidor no válida');
+            throw new Error('Respuesta del servidor no válida. Posible error en el servidor PHP.');
         }
         
         console.log('Parsed data:', data);
@@ -166,18 +205,19 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         if (data.success) {
             console.log('Login exitoso:', data.user);
             
-            // CORREGIDO: Limpiar sesión anterior antes de crear nueva
+            // Limpiar sesión anterior antes de crear nueva
             clearSession();
             
             // Almacenar datos del usuario
             localStorage.setItem('user_data', JSON.stringify(data.user));
             localStorage.setItem('login_time', new Date().getTime().toString());
             
-            // VERIFICAR que se guardó correctamente
-            console.log('Datos guardados en localStorage:');
+            // Verificar que se guardó correctamente
+            console.log('=== SESSION STORAGE DEBUG ===');
             console.log('user_data:', localStorage.getItem('user_data'));
             console.log('login_time:', localStorage.getItem('login_time'));
             console.log('isSessionValid():', isSessionValid());
+            console.log('============================');
             
             showMessage('¡Inicio de sesión exitoso! Redirigiendo...', 'success');
             
@@ -197,11 +237,20 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
+        console.error('=== FETCH ERROR DEBUG ===');
         console.error('Error completo:', error);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('========================');
+        
         setButtonLoading(false);
         
-        if (error.message.includes('fetch')) {
+        if (error.message.includes('404')) {
+            showMessage('Error 404: API no encontrada. Verifica la ruta del servidor.', 'error');
+        } else if (error.message.includes('Failed to fetch')) {
             showMessage('Error de conexión. Verifica que el servidor esté funcionando.', 'error');
+        } else if (error.message.includes('NetworkError')) {
+            showMessage('Error de red. Verifica tu conexión a internet.', 'error');
         } else {
             showMessage('Error: ' + error.message, 'error');
         }
@@ -214,13 +263,14 @@ function isValidEmail(email) {
     return emailRegex.test(email);
 }
 
-// *** VERIFICACIÓN DE SESIÓN AL CARGAR LA PÁGINA - CORREGIDA ***
+// * VERIFICACIÓN DE SESIÓN AL CARGAR LA PÁGINA - CORREGIDA *
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== SESSION CHECK DEBUG ===');
     console.log('Current URL:', window.location.href);
     console.log('localStorage user_data:', localStorage.getItem('user_data'));
     console.log('localStorage login_time:', localStorage.getItem('login_time'));
     console.log('isSessionValid():', isSessionValid());
+    console.log('API Base URL:', getApiBaseUrl());
     
     // Detectar el tipo de página actual
     const isLoginPage = window.location.pathname.includes('login') || 
@@ -274,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('=========================');
 });
 
-// *** FUNCIÓN PARA LOGOUT (opcional) ***
+// * FUNCIÓN PARA LOGOUT (opcional) *
 function logout() {
     clearSession();
     showMessage('Sesión cerrada correctamente', 'success');
@@ -283,9 +333,39 @@ function logout() {
     }, 1000);
 }
 
+// Función para probar la conectividad con el API
+function testApiConnection() {
+    const apiUrl = getApiBaseUrl();
+    console.log('Probando conexión con API:', apiUrl);
+    
+    fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+        }
+    })
+    .then(response => {
+        console.log('Test API Response:', response.status, response.statusText);
+        return response.text();
+    })
+    .then(text => {
+        console.log('Test API Response body:', text);
+    })
+    .catch(error => {
+        console.error('Test API Error:', error);
+    });
+}
+
 // Debug: Mostrar información de conexión
 console.log('=== LOGIN DEBUG INFO ===');
-console.log('URL API:', 'http://localhost/URBANCOOP/APIS/API_Usuarios.php?action=login');
+console.log('API Base URL:', getApiBaseUrl());
+console.log('Current Location:', window.location.href);
 console.log('Fecha/Hora:', new Date().toLocaleString());
 console.log('User Agent:', navigator.userAgent);
 console.log('========================');
+
+// Probar conexión al cargar (solo en desarrollo)
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    testApiConnection();
+}

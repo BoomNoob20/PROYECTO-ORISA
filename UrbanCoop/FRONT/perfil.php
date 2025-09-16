@@ -1,12 +1,12 @@
 <?php
-// perfil.php - Versión corregida
+// perfil.php - Sistema de Pagos Mejorado con Saldo
 session_start();
 
 // Configuración de errores para depuración
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Configuración de base de datos para validación básica
+// Configuración de base de datos
 $host = 'localhost';
 $dbname = 'usuarios_urban_coop';
 $username = 'root';
@@ -19,76 +19,17 @@ try {
     die("Error de conexión: " . $e->getMessage());
 }
 
-// FUNCIÓN DE VALIDACIÓN DE SESIÓN SIMPLIFICADA
-function validateUserSession($pdo) {
-    // Para acceso directo desde admin
-    if (isset($_GET['user_id']) && isset($_GET['verify'])) {
-        $user_id = intval($_GET['user_id']);
-        $verify_token = $_GET['verify'];
-        
-        // Token simple para verificar que viene del admin
-        $expected_token = md5('admin_access_' . $user_id . date('Y-m-d'));
-        
-        if ($verify_token === $expected_token) {
-            try {
-                $stmt = $pdo->prepare("SELECT id, usr_name, usr_surname, estado, usr_email, is_admin FROM usuario WHERE id = ?");
-                $stmt->execute([$user_id]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($user) {
-                    return $user;
-                }
-            } catch(PDOException $e) {
-                return false;
-            }
-        }
-    }
-    
-    // Para usuarios normales, la validación principal se hace en JavaScript
-    return 'js_validation';
+// FUNCIÓN DE VALIDACIÓN SIMPLIFICADA
+function validateUserAccess() {
+    return true;
 }
 
-// VALIDAR AUTENTICACIÓN
-$current_user = validateUserSession($pdo);
-
-// Si la validación indica que debe manejarse por JavaScript, no bloqueamos aquí
-if ($current_user === false) {
-    header('Location: loginLP.php');
-    exit();
-}
-
-// Variables por defecto (se actualizarán por JavaScript)
+// Variables por defecto
 $user_name = 'Usuario';
-$user_status = 2; // Por defecto aprobado
+$user_status = 2;
 $user_id = 0;
 $can_access = true;
 
-// Si tenemos datos del usuario desde la URL (acceso desde admin)
-if (is_array($current_user)) {
-    $user_name = $current_user['usr_name'] . ' ' . $current_user['usr_surname'];
-    $user_status = $current_user['estado'];
-    $user_id = $current_user['id'];
-    
-    // Manejar diferentes estados del usuario
-    $status_message = '';
-    
-    switch ($user_status) {
-        case 1:
-            $status_message = 'Esperando la aprobación manual de un administrador';
-            $can_access = false;
-            break;
-        case 2:
-            $can_access = true;
-            break;
-        case 3:
-            $status_message = 'Usuario rechazado. Contacte con el administrador.';
-            $can_access = false;
-            break;
-        default:
-            $status_message = 'Estado de usuario desconocido';
-            $can_access = false;
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -129,7 +70,6 @@ if (is_array($current_user)) {
                     </div>
                     <div class="search-box">
                         <input type="text" class="search-input" placeholder="Buscar...">
-                        <span class="menu-item-count" id="myDayCount">0</span>
                     </div>
                     
                     <div class="menu-item">
@@ -248,42 +188,6 @@ if (is_array($current_user)) {
                                     </button>
                                 </div>
                             </div>
-                            
-                            <div class="task-item" data-category="casa">
-                                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
-                                <span class="task-text">Actualizar datos personales</span>
-                                <div class="task-actions">
-                                    <button class="star-btn favorite" onclick="toggleFavorite(this)" title="Marcar como importante">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
-                                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
-                                        </svg>
-                                    </button>
-                                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="3,6 5,6 21,6"></polyline>
-                                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="task-item" data-category="casa">
-                                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
-                                <span class="task-text">Programar reunión equipo</span>
-                                <div class="task-actions">
-                                    <button class="star-btn" onclick="toggleFavorite(this)" title="Marcar como importante">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
-                                        </svg>
-                                    </button>
-                                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="3,6 5,6 21,6"></polyline>
-                                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -291,18 +195,64 @@ if (is_array($current_user)) {
                     <div id="payments-section" class="section">
                         <div class="section-header">
                             <h2 class="section-title">Comprobantes de Pago</h2>
-                            <button class="add-btn" onclick="showUploadForm()">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="7,10 12,15 17,10"></polyline>
-                                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                                </svg>
-                                Subir Comprobante
-                            </button>
+                            <div class="payment-actions">
+                                <button class="add-btn" onclick="showUploadForm()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7,10 12,15 17,10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Subir Comprobante
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Payment Summary Cards -->
+                        <div class="payment-summary-cards">
+                            <div class="summary-card balance-card">
+                                <div class="card-header">
+                                    <h3>Saldo Actual</h3>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                        <line x1="1" y1="10" x2="23" y2="10"></line>
+                                    </svg>
+                                </div>
+                                <div class="card-amount" id="currentBalance">$0</div>
+                                <div class="card-status" id="paymentStatus">Cargando...</div>
+                            </div>
+
+                            <div class="summary-card fee-card">
+                                <div class="card-header">
+                                    <h3>Cuota Mensual</h3>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                </div>
+                                <div class="card-amount" id="monthlyFee">$22.000</div>
+                                <div class="card-subtitle">Cuota fija mensual</div>
+                            </div>
+
+                            <div class="summary-card progress-card">
+                                <div class="card-header">
+                                    <h3>Progreso de Pago</h3>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                                    </svg>
+                                </div>
+                                <div class="progress-container">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                                    </div>
+                                    <div class="progress-text" id="progressText">0%</div>
+                                </div>
+                                <div class="card-subtitle">Completado este mes</div>
+                            </div>
                         </div>
 
                         <div id="paymentMessages"></div>
 
+                        <!-- Upload Form -->
                         <div id="upload-form" style="display: none;">
                             <div class="form-container">
                                 <form id="uploadPaymentForm" enctype="multipart/form-data" onsubmit="submitPaymentForm(event)">
@@ -347,6 +297,18 @@ if (is_array($current_user)) {
                                             </select>
                                         </div>
                                     </div>
+
+                                    <div class="form-group">
+                                        <label>Importe del Pago *</label>
+                                        <div class="amount-input-container">
+                                            <span class="currency-symbol">$</span>
+                                            <input type="number" name="payment_amount" id="payment_amount" 
+                                                   min="1000" max="1000000" step="1" 
+                                                   placeholder="22000" 
+                                                   required>
+                                        </div>
+                                        <small style="color: #666;">Ingrese el monto sin puntos ni comas</small>
+                                    </div>
                                     
                                     <div class="form-group">
                                         <label>Descripción (opcional)</label>
@@ -356,6 +318,36 @@ if (is_array($current_user)) {
                                     <div style="display: flex; gap: 10px;">
                                         <button type="submit" class="submit-btn">Subir Comprobante</button>
                                         <button type="button" class="submit-btn" onclick="hideUploadForm()" style="background: #666;">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Balance Form -->
+                        <div id="balance-form" style="display: none;">
+                            <div class="form-container">
+                                <form id="balanceForm" onsubmit="submitBalanceForm(event)">
+                                    <h3 style="margin-bottom: 20px; color: #d32f2f;">Agregar Saldo a la Cuenta</h3>
+                                    <div class="form-group">
+                                        <label>Monto a Agregar *</label>
+                                        <div class="amount-input-container">
+                                            <span class="currency-symbol">$</span>
+                                            <input type="number" name="balance_amount" id="balance_amount" 
+                                                   min="100" max="500000" step="1" 
+                                                   placeholder="22000" 
+                                                   required>
+                                        </div>
+                                        <small style="color: #666;">Monto entre $100 y $500.000</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label>Descripción (opcional)</label>
+                                        <textarea name="balance_description" id="balance_description" rows="2" placeholder="Motivo del ingreso de saldo..."></textarea>
+                                    </div>
+                                    
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="submit-btn">Agregar Saldo</button>
+                                        <button type="button" class="submit-btn" onclick="hideBalanceForm()" style="background: #666;">Cancelar</button>
                                     </div>
                                 </form>
                             </div>
@@ -379,7 +371,6 @@ if (is_array($current_user)) {
                             </button>
                         </div>
 
-                        <!-- Resumen de horas del mes -->
                         <div class="hours-summary">
                             <h3>Resumen del mes actual</h3>
                             <p>Total de horas registradas: <strong id="totalHoursMonth">0 horas</strong></p>
@@ -468,6 +459,256 @@ if (is_array($current_user)) {
         100% { transform: rotate(360deg); }
     }
 
+    /* Payment Summary Cards */
+    .payment-summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .summary-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-left: 4px solid #d32f2f;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+
+    .summary-card .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .summary-card .card-header h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .summary-card .card-header svg {
+        color: #d32f2f;
+        opacity: 0.7;
+    }
+
+    .summary-card .card-amount {
+        font-size: 32px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 8px;
+        line-height: 1;
+    }
+
+    .balance-card .card-amount {
+        color: #2e7d32;
+    }
+
+    .fee-card .card-amount {
+        color: #d32f2f;
+    }
+
+    .summary-card .card-status,
+    .summary-card .card-subtitle {
+        font-size: 14px;
+        color: #666;
+        margin: 0;
+    }
+
+    .progress-card .progress-container {
+        margin-bottom: 12px;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 12px;
+        background: #f0f0f0;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #4caf50 0%, #2e7d32 100%);
+        border-radius: 6px;
+        transition: width 0.6s ease;
+        position: relative;
+    }
+
+    .progress-fill::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+        animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+
+    .progress-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        text-align: center;
+    }
+
+    /* Payment Actions */
+    .payment-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .secondary-btn {
+        background: #2196f3 !important;
+    }
+
+    .secondary-btn:hover {
+        background: #1976d2 !important;
+    }
+
+    /* Amount Input Container */
+    .amount-input-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .currency-symbol {
+        position: absolute;
+        left: 15px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #666;
+        z-index: 1;
+    }
+
+    .amount-input-container input {
+        padding-left: 35px !important;
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    /* Enhanced form styles */
+    .form-container {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+        border-left: 4px solid #d32f2f;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #d32f2f;
+        box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1);
+    }
+
+    .upload-area {
+        border: 2px dashed #d0d0d0;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .upload-area:hover {
+        border-color: #d32f2f;
+        background: #fafafa;
+    }
+
+    .upload-area input[type="file"] {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+    }
+
+    .upload-area p {
+        margin: 10px 0 0 0;
+        color: #666;
+    }
+
+    .upload-area svg {
+        color: #d32f2f;
+        margin-bottom: 16px;
+    }
+
+    .submit-btn {
+        padding: 12px 24px;
+        background: #d32f2f;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .submit-btn:hover {
+        background: #b71c1c;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
+    }
+
     .admin-btn {
         position: fixed;
         bottom: 100px;
@@ -534,25 +775,47 @@ if (is_array($current_user)) {
         color: #c62828;
         border-left: 4px solid #e53935;
     }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .payment-summary-cards {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .payment-actions {
+            flex-direction: column;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .summary-card {
+            padding: 20px;
+        }
+
+        .summary-card .card-amount {
+            font-size: 28px;
+        }
+    }
     </style>
 
     <script>
     // Variables globales
     let currentUser = null;
     let isUserDataLoaded = false;
-    const API_BASE = 'API_cooperativa.php';
 
-    // FUNCIÓN DE VALIDACIÓN DE SESIÓN (CORREGIDA)
+    // CONFIGURACIÓN DE API
+    const API_BASE = './API_cooperativa.php';
+
+    // FUNCIÓN DE VALIDACIÓN DE SESIÓN SIMPLIFICADA
     function isSessionValid() {
         const userData = localStorage.getItem('user_data');
         const loginTime = localStorage.getItem('login_time');
         
-        console.log('Validando sesión...');
-        console.log('userData:', userData);
-        console.log('loginTime:', loginTime);
-        
         if (!userData || !loginTime) {
-            console.log('No hay datos de sesión');
             return false;
         }
         
@@ -562,23 +825,19 @@ if (is_array($current_user)) {
             const login = parseInt(loginTime);
             
             if (!user.id || !user.email) {
-                console.log('Datos de usuario incompletos');
                 return false;
             }
             
             // Verificar que no hayan pasado más de 24 horas
-            const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 horas
+            const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
             if (now - login > SESSION_TIMEOUT) {
-                console.log('Sesión expirada');
                 localStorage.removeItem('user_data');
                 localStorage.removeItem('login_time');
                 return false;
             }
             
-            console.log('Sesión válida');
             return true;
         } catch (e) {
-            console.error('Error validating session:', e);
             localStorage.removeItem('user_data');
             localStorage.removeItem('login_time');
             return false;
@@ -594,7 +853,6 @@ if (is_array($current_user)) {
             const userData = localStorage.getItem('user_data');
             return JSON.parse(userData);
         } catch (e) {
-            console.error('Error getting current user:', e);
             localStorage.removeItem('user_data');
             localStorage.removeItem('login_time');
             return null;
@@ -604,17 +862,14 @@ if (is_array($current_user)) {
     function clearSession() {
         localStorage.removeItem('user_data');
         localStorage.removeItem('login_time');
-        console.log('Sesión limpiada');
     }
 
-    // FUNCIÓN PRINCIPAL DE INICIALIZACIÓN (CORREGIDA)
+    // FUNCIÓN PRINCIPAL DE INICIALIZACIÓN
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('=== PERFIL SESSION CHECK ===');
-        console.log('Current URL:', window.location.href);
+        console.log('=== PERFIL INITIALIZATION ===');
         
         // Verificar si hay sesión válida
         if (!isSessionValid()) {
-            console.log('No hay sesión válida - redirigiendo al login');
             redirectToLogin('No hay sesión activa');
             return;
         }
@@ -623,16 +878,12 @@ if (is_array($current_user)) {
         currentUser = getCurrentUser();
         
         if (!currentUser) {
-            console.log('Error obteniendo datos del usuario');
             redirectToLogin('Error en los datos de sesión');
             return;
         }
         
-        console.log('Usuario cargado:', currentUser);
-        
         // Validar estructura de datos del usuario
         if (!currentUser.id || !currentUser.email || currentUser.estado === undefined) {
-            console.error('Datos de usuario incompletos:', currentUser);
             clearSession();
             redirectToLogin('Datos de usuario incompletos');
             return;
@@ -651,7 +902,6 @@ if (is_array($current_user)) {
         }
 
         // Usuario aprobado - inicializar aplicación
-        console.log('Inicializando aplicación para usuario aprobado');
         initializeApp();
     });
 
@@ -665,7 +915,7 @@ if (is_array($current_user)) {
         const messageEl = document.getElementById('statusMessage');
         
         if (type === 'waiting') {
-            icon.innerHTML = '⏳';
+            icon.innerHTML = '⳿';
         } else if (type === 'rejected') {
             icon.innerHTML = '❌';
         } else {
@@ -690,14 +940,12 @@ if (is_array($current_user)) {
         hideLoadingScreen();
         document.getElementById('mainApp').style.display = 'block';
         
-        console.log('Aplicación inicializada correctamente');
         isUserDataLoaded = true;
     }
 
     function updateUserInterface() {
         const userNameDisplay = document.getElementById('userNameDisplay');
         if (userNameDisplay) {
-            // Compatibilidad con ambos formatos de nombres
             const firstName = currentUser.name || currentUser.usr_name || 'Usuario';
             const lastName = currentUser.surname || currentUser.usr_surname || '';
             userNameDisplay.textContent = `${firstName} ${lastName}`.trim();
@@ -719,7 +967,7 @@ if (is_array($current_user)) {
         if (hoursUserId) hoursUserId.value = currentUser.id;
     }
 
-    // Funciones API (CORREGIDA)
+    // Funciones API
     function loadUserData() {
         console.log('Cargando datos del usuario...');
         
@@ -734,13 +982,11 @@ if (is_array($current_user)) {
         })
         .then(response => {
             console.log('Response status:', response.status);
-            console.log('Response headers:', response.headers);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            // Verificar que la respuesta es JSON
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 throw new Error('La respuesta no es JSON válido');
@@ -753,9 +999,14 @@ if (is_array($current_user)) {
             
             if (data.success) {
                 console.log('Datos cargados exitosamente');
-                updatePaymentsList(data.data.payments);
-                updateHoursList(data.data.hours);
-                updateHoursMonth(data.data.total_hours_month, data.data.current_month);
+                updatePaymentsList(data.data.payments || []);
+                updateHoursList(data.data.hours || []);
+                updateHoursMonth(data.data.total_hours_month || 0, data.data.current_month || 'Mes Actual');
+                
+                // Actualizar información de pagos
+                if (data.data.payment_info) {
+                    updatePaymentSummary(data.data.payment_info);
+                }
             } else {
                 console.error('Error al cargar datos:', data.message);
                 showMessage('paymentMessages', 'Error al cargar datos: ' + data.message, 'error');
@@ -763,8 +1014,57 @@ if (is_array($current_user)) {
         })
         .catch(error => {
             console.error('Error de conexión:', error);
-            showMessage('paymentMessages', 'Error de conexión: ' + error.message, 'error');
+            showMessage('paymentMessages', 'Error de conexión. Verifica que el archivo API_cooperativa.php esté en el directorio correcto.', 'error');
         });
+    }
+
+    function updatePaymentSummary(paymentInfo) {
+        // Actualizar saldo actual
+        const currentBalanceEl = document.getElementById('currentBalance');
+        const paymentStatusEl = document.getElementById('paymentStatus');
+        const monthlyFeeEl = document.getElementById('monthlyFee');
+        const progressFillEl = document.getElementById('progressFill');
+        const progressTextEl = document.getElementById('progressText');
+        
+        if (currentBalanceEl) {
+            currentBalanceEl.textContent = paymentInfo.balance_formatted || '$0';
+        }
+        
+        if (paymentStatusEl) {
+            paymentStatusEl.textContent = paymentInfo.payment_status || 'Desconocido';
+            
+            // Cambiar color según estado
+            if (paymentInfo.payment_status === 'Al día') {
+                paymentStatusEl.style.color = '#2e7d32';
+            } else if (paymentInfo.payment_status === 'Pago parcial') {
+                paymentStatusEl.style.color = '#f57c00';
+            } else {
+                paymentStatusEl.style.color = '#d32f2f';
+            }
+        }
+        
+        if (monthlyFeeEl) {
+            monthlyFeeEl.textContent = paymentInfo.monthly_fee_formatted || '$22.000';
+        }
+        
+        // Actualizar barra de progreso
+        const progress = paymentInfo.payment_progress || 0;
+        if (progressFillEl) {
+            progressFillEl.style.width = progress + '%';
+            
+            // Cambiar color según progreso
+            if (progress >= 100) {
+                progressFillEl.style.background = 'linear-gradient(90deg, #4caf50 0%, #2e7d32 100%)';
+            } else if (progress >= 50) {
+                progressFillEl.style.background = 'linear-gradient(90deg, #ff9800 0%, #f57c00 100%)';
+            } else {
+                progressFillEl.style.background = 'linear-gradient(90deg, #f44336 0%, #d32f2f 100%)';
+            }
+        }
+        
+        if (progressTextEl) {
+            progressTextEl.textContent = Math.round(progress) + '%';
+        }
     }
 
     function submitPaymentForm(event) {
@@ -773,10 +1073,10 @@ if (is_array($current_user)) {
         const formData = new FormData();
         const form = document.getElementById('uploadPaymentForm');
         
-        // Agregar todos los campos del formulario
         formData.append('user_id', currentUser.id);
         formData.append('payment_month', form.payment_month.value);
         formData.append('payment_year', form.payment_year.value);
+        formData.append('payment_amount', form.payment_amount.value);
         formData.append('payment_description', form.payment_description.value);
         formData.append('payment_file', form.payment_file.files[0]);
         
@@ -790,7 +1090,7 @@ if (is_array($current_user)) {
                 showMessage('paymentMessages', data.message, 'success');
                 hideUploadForm();
                 form.reset();
-                loadUserData(); // Recargar datos
+                loadUserData(); // Recargar datos para actualizar resumen
             } else {
                 showMessage('paymentMessages', data.message, 'error');
             }
@@ -798,6 +1098,45 @@ if (is_array($current_user)) {
         .catch(error => {
             console.error('Error:', error);
             showMessage('paymentMessages', 'Error al subir el comprobante', 'error');
+        });
+    }
+
+    function submitBalanceForm(event) {
+        event.preventDefault();
+        
+        const form = document.getElementById('balanceForm');
+        const amount = parseFloat(form.balance_amount.value);
+        const description = form.balance_description.value;
+        
+        if (!confirm(`¿Estás seguro de agregar ${amount.toLocaleString()} a tu saldo?`)) {
+            return;
+        }
+        
+        fetch(API_BASE + '?action=add_balance', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id,
+                amount: amount,
+                description: description
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('paymentMessages', `Saldo agregado exitosamente. Nuevo saldo: ${data.data.balance_formatted}`, 'success');
+                hideBalanceForm();
+                form.reset();
+                loadUserData(); // Recargar datos para actualizar resumen
+            } else {
+                showMessage('paymentMessages', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('paymentMessages', 'Error al agregar el saldo', 'error');
         });
     }
 
@@ -827,7 +1166,7 @@ if (is_array($current_user)) {
                 showMessage('hoursMessages', data.message, 'success');
                 hideHoursForm();
                 form.reset();
-                loadUserData(); // Recargar datos
+                loadUserData();
             } else {
                 showMessage('hoursMessages', data.message, 'error');
             }
@@ -857,7 +1196,7 @@ if (is_array($current_user)) {
         .then(data => {
             if (data.success) {
                 showMessage('paymentMessages', data.message, 'success');
-                loadUserData(); // Recargar datos
+                loadUserData();
             } else {
                 showMessage('paymentMessages', data.message, 'error');
             }
@@ -887,7 +1226,7 @@ if (is_array($current_user)) {
         .then(data => {
             if (data.success) {
                 showMessage('hoursMessages', data.message, 'success');
-                loadUserData(); // Recargar datos
+                loadUserData();
             } else {
                 showMessage('hoursMessages', data.message, 'error');
             }
@@ -904,8 +1243,8 @@ if (is_array($current_user)) {
         
         if (!payments || payments.length === 0) {
             paymentsList.innerHTML = `
-                <div class="empty-state">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 20px;">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14,2 14,8 20,8"></polyline>
                         <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -921,7 +1260,7 @@ if (is_array($current_user)) {
         
         let paymentsHTML = '';
         payments.forEach(payment => {
-            const fileIcon = payment.file_type.includes('pdf') ? 
+            const fileIcon = payment.file_type && payment.file_type.includes('pdf') ? 
                 `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d32f2f" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14,2 14,8 20,8"></polyline>
@@ -935,27 +1274,36 @@ if (is_array($current_user)) {
                     <polyline points="21,15 16,10 5,21"></polyline>
                 </svg>`;
             
+            const monthName = payment.month_name || 'Mes';
+            const createdAt = payment.created_at_formatted || payment.created_at || 'Fecha desconocida';
+            const fileSize = payment.file_size_display || 'Tamaño desconocido';
+            const status = payment.status || 'pendiente';
+            const amount = payment.payment_amount_formatted || '$0';
+            
+            let statusBadge = '';
+            if (status === 'aprobado') {
+                statusBadge = '<span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase; background: #e8f5e8; color: #2e7d32;">Aprobado</span>';
+            } else if (status === 'rechazado') {
+                statusBadge = '<span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase; background: #ffebee; color: #d32f2f;">Rechazado</span>';
+            } else {
+                statusBadge = '<span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase; background: #fff3e0; color: #f57c00;">Pendiente</span>';
+            }
+            
             paymentsHTML += `
-                <div class="file-item">
-                    <div class="file-info-wrapper">
+                <div class="payment-item" style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 15px; background: white;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
                         <div class="file-icon">${fileIcon}</div>
                         <div class="file-info">
-                            <h3>Comprobante ${payment.month_name} ${payment.payment_year}</h3>
-                            <p>Subido el ${payment.created_at} • ${payment.file_size}</p>
-                            ${payment.description ? `<p style="font-style: italic; margin-top: 5px;">${payment.description}</p>` : ''}
+                            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Comprobante ${monthName} ${payment.payment_year}</h3>
+                            <p style="margin: 0 0 4px 0; color: #666; font-size: 14px;">Importe: <strong style="color: #2e7d32;">${payment.payment_amount ? payment.payment_amount.toLocaleString() : '0'}</strong></p>
+                            <p style="margin: 0 0 4px 0; color: #666; font-size: 14px;">Subido el ${createdAt} • ${fileSize}</p>
+                            ${payment.description ? `<p style="font-style: italic; margin: 5px 0 0 0; color: #888; font-size: 13px;">${payment.description}</p>` : ''}
                         </div>
                     </div>
-                    <div class="file-actions">
-                        <span class="file-status status-${payment.status}">${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
-                        <a href="${API_BASE}?action=download_payment&id=${payment.id}&user_id=${currentUser.id}" class="action-btn" title="Descargar">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7,10 12,15 17,10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Descargar
-                        </a>
-                        <button onclick="deletePayment(${payment.id})" class="delete-payment-btn">Eliminar</button>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        ${statusBadge}
+                        <a href="${API_BASE}?action=download_payment&id=${payment.id}&user_id=${currentUser.id}" style="padding: 8px 16px; background: #2196f3; color: white; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500;">Descargar</a>
+                        <button onclick="deletePayment(${payment.id})" style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">Eliminar</button>
                     </div>
                 </div>
             `;
@@ -983,17 +1331,19 @@ if (is_array($current_user)) {
         
         let hoursHTML = '';
         hours.forEach(record => {
+            const workDate = record.work_date_formatted || record.work_date || 'Fecha desconocida';
+            const createdAt = record.created_at_formatted || record.created_at || 'Fecha desconocida';
+            const workType = record.work_type_display || record.work_type || 'Tipo desconocido';
+            
             hoursHTML += `
-                <div class="hours-item">
-                    <div class="hours-actions">
-                        <button onclick="deleteHours(${record.id})" class="delete-hours-btn">Eliminar</button>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 15px; background: white;">
+                    <div style="flex-grow: 1;">
+                        <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">${workDate} - ${record.hours_worked} horas</h3>
+                        <p style="margin: 0 0 8px 0; font-weight: 500; color: #d32f2f;">Tipo: ${workType}</p>
+                        <p style="margin: 0 0 12px 0; color: #333; line-height: 1.5;">${record.description}</p>
+                        <small style="color: #666; font-size: 13px;">Registrado el ${createdAt}</small>
                     </div>
-                    <div class="hours-info">
-                        <h3>${record.work_date_formatted} - ${record.hours_worked} horas</h3>
-                        <p><strong>Tipo:</strong> ${record.work_type}</p>
-                        <p>${record.description}</p>
-                        <small style="color: #666;">Registrado el ${record.created_at}</small>
-                    </div>
+                    <button onclick="deleteHours(${record.id})" style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-left: 20px; font-weight: 500;">Eliminar</button>
                 </div>
             `;
         });
@@ -1061,7 +1411,6 @@ if (is_array($current_user)) {
         
         container.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
         
-        // Auto-ocultar después de 5 segundos
         setTimeout(() => {
             container.innerHTML = '';
         }, 5000);
@@ -1180,10 +1529,20 @@ if (is_array($current_user)) {
     // Funciones de formularios
     function showUploadForm() {
         document.getElementById('upload-form').style.display = 'block';
+        document.getElementById('balance-form').style.display = 'none';
     }
 
     function hideUploadForm() {
         document.getElementById('upload-form').style.display = 'none';
+    }
+
+    function showBalanceForm() {
+        document.getElementById('balance-form').style.display = 'block';
+        document.getElementById('upload-form').style.display = 'none';
+    }
+
+    function hideBalanceForm() {
+        document.getElementById('balance-form').style.display = 'none';
     }
 
     function showHoursForm() {
@@ -1226,6 +1585,13 @@ if (is_array($current_user)) {
                     this.querySelector('input[type="file"]').files = files;
                     this.querySelector('p').textContent = files[0].name;
                 }
+            });
+
+            // Mostrar nombre del archivo seleccionado
+            const fileInput = uploadArea.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', function() {
+                const fileName = this.files[0]?.name || 'Ningún archivo seleccionado';
+                uploadArea.querySelector('p').textContent = fileName;
             });
         }
     }

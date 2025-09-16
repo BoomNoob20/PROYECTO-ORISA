@@ -1,22 +1,22 @@
 <?php
-// API_cooperativa.php - Fixed version
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-// Error reporting for debugging (remove in production)
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // Don't display errors in JSON response
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-// Database configuration
+define('JWT_SECRET', 'tu_clave_secreta_muy_segura_2024_urbancoop');
+define('JWT_ALGORITHM', 'HS256');
+
+// Configuración de la base de datos
 $host = 'localhost';
 $dbname = 'usuarios_urban_coop';
 $username = 'root';
@@ -26,36 +26,112 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch(PDOException $e) {
-    respondWithError("Database connection error: " . $e->getMessage());
+    respondWithError("Error de conexión: " . $e->getMessage());
 }
 
-// Helper function to send JSON responses
+// Funciones JWT
+function base64UrlDecode($data) {
+    return base64_decode(str_pad(strtr($data, '-_', '+/'), strlen($data) % 4, '=', STR_PAD_RIGHT));
+}
+
+function verifyJWT($token) {
+    if (!$token) return false;
+    
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) return false;
+    
+    list($headerEncoded, $payloadEncoded, $signatureEncoded) = $parts;
+    
+    $signature = hash_hmac('sha256', $headerEncoded . "." . $payloadEncoded, JWT_SECRET, true);
+    $expectedSignature = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
+    
+    if (!hash_equals($expectedSignature, $signatureEncoded)) {
+        return false;
+    }
+    
+    $payload = json_decode(base64UrlDecode($payloadEncoded), true);
+    
+    if (!$payload || !isset($payload['exp']) || $payload['exp'] < time()) {
+        return false;
+    }
+    
+    return $payload;
+}
+
+function getAuthToken() {
+    $headers = getallheaders();
+    
+    if (isset($headers['Authorization'])) {
+        if (preg_match('/Bearer\s+(.*)$/i', $headers['Authorization'], $matches)) {
+            return $matches[1];
+        }
+    }
+    
+    return $_POST['token'] ?? $_GET['token'] ?? null;
+}
+
+function requireAuth($pdo) {
+    $token = getAuthToken();
+    
+    if (!$token) {
+        respondWithError("Token de autenticación requerido", [], 401);
+    }
+    
+    $payload = verifyJWT($token);
+    
+    if (!$payload) {
+        respondWithError("Token inválido o expirado", [], 401);
+    }
+    
+    $stmt = $pdo->prepare("SELECT id, estado, is_admin, name, surname FROM usuario WHERE id = ?");
+    $stmt->execute([$payload['user_id']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) {
+        respondWithError("Usuario no encontrado", [], 401);
+    }
+    
+    if ($user['estado'] != 2) {
+        respondWithError("Usuario no autorizado", [], 401);
+    }
+    
+    return [
+        'payload' => $payload,
+        'user' => $user
+    ];
+}
+
+// Funciones de respuesta
 function respondWithSuccess($message, $data = []) {
+    http_response_code(200);
     echo json_encode([
         'success' => true,
         'message' => $message,
-        'data' => $data
-    ]);
+        'data' => $data,
+        'timestamp' => date('Y-m-d H:i:s')
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit();
 }
 
-function respondWithError($message, $data = []) {
+function respondWithError($message, $data = [], $httpCode = 400) {
+    http_response_code($httpCode);
     echo json_encode([
         'success' => false,
         'message' => $message,
-        'data' => $data
-    ]);
+        'data' => $data,
+        'timestamp' => date('Y-m-d H:i:s')
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit();
 }
 
-// Get action from query parameter or POST data
+// Obtener acción
 $action = $_GET['action'] ?? ($_POST['action'] ?? null);
 
 if (!$action) {
-    respondWithError("No action specified");
+    respondWithError("Acción no especificada");
 }
 
-// Route to appropriate handler
+// Enrutador
 switch ($action) {
     case 'get_user_data':
         handleGetUserData($pdo);
@@ -75,26 +151,50 @@ switch ($action) {
     case 'download_payment':
         handleDownloadPayment($pdo);
         break;
+    case 'get_payment_summary':
+        handleGetPaymentSummary($pdo);
+        break;
+    case 'add_balance':
+        handleAddBalance($pdo);
+        break;
     default:
-        respondWithError("Invalid action: " . $action);
+        respondWithError("Acción inválida: " . $action);
 }
 
+// Función para obtener datos del usuario
 function handleGetUserData($pdo) {
-    // Get JSON input
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
     $input = json_decode(file_get_contents('php://input'), true);
     
-    if (!$input || !isset($input['user_id'])) {
-        respondWithError("User ID required");
-    }
-    
-    $user_id = intval($input['user_id']);
-    
-    if ($user_id <= 0) {
-        respondWithError("Invalid user ID");
+    if (isset($input['user_id']) && $input['user_id'] != $user_id) {
+        respondWithError("No autorizado para acceder a datos de otro usuario", [], 403);
     }
     
     try {
-        // Get user payments
+        $stmt = $pdo->prepare("
+            SELECT id, account_balance, monthly_fee, last_balance_reset 
+            FROM usuario 
+            WHERE id = ?
+        ");
+        $stmt->execute([$user_id]);
+        $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$userData) {
+            respondWithError("Usuario no encontrado");
+        }
+        
+        processMonthlyReset($pdo, $user_id, $userData);
+        
+        $stmt = $pdo->prepare("
+            SELECT account_balance, monthly_fee 
+            FROM usuario 
+            WHERE id = ?
+        ");
+        $stmt->execute([$user_id]);
+        $updatedUserData = $stmt->fetch(PDO::FETCH_ASSOC);
+        
         $stmt = $pdo->prepare("
             SELECT p.*, 
                    CASE p.payment_month 
@@ -112,29 +212,28 @@ function handleGetUserData($pdo) {
                        WHEN '12' THEN 'Diciembre'
                        ELSE 'Desconocido'
                    END as month_name,
-                   DATE_FORMAT(p.created_at, '%d/%m/%Y %H:%i') as created_at,
-                   ROUND(p.file_size / 1024, 2) as file_size_kb
-            FROM payment_receipts p 
+                   DATE_FORMAT(p.created_at, '%d/%m/%Y %H:%i') as created_at_formatted,
+                   ROUND(p.file_size / 1024, 2) as file_size_kb,
+                   FORMAT(p.payment_amount, 2) as payment_amount_formatted
+            FROM comprobantes_pago p 
             WHERE p.user_id = ? 
             ORDER BY p.payment_year DESC, p.payment_month DESC, p.created_at DESC
         ");
         $stmt->execute([$user_id]);
         $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Format file sizes
         foreach ($payments as &$payment) {
             if ($payment['file_size_kb'] > 1024) {
-                $payment['file_size'] = round($payment['file_size_kb'] / 1024, 2) . ' MB';
+                $payment['file_size_display'] = round($payment['file_size_kb'] / 1024, 2) . ' MB';
             } else {
-                $payment['file_size'] = $payment['file_size_kb'] . ' KB';
+                $payment['file_size_display'] = $payment['file_size_kb'] . ' KB';
             }
         }
         
-        // Get user hours
         $stmt = $pdo->prepare("
             SELECT h.*, 
                    DATE_FORMAT(h.work_date, '%d/%m/%Y') as work_date_formatted,
-                   DATE_FORMAT(h.created_at, '%d/%m/%Y %H:%i') as created_at,
+                   DATE_FORMAT(h.created_at, '%d/%m/%Y %H:%i') as created_at_formatted,
                    CASE h.work_type
                        WHEN 'desarrollo' THEN 'Desarrollo'
                        WHEN 'reunion' THEN 'Reuniones'
@@ -143,29 +242,36 @@ function handleGetUserData($pdo) {
                        WHEN 'administrativo' THEN 'Administrativo'
                        WHEN 'soporte' THEN 'Soporte Técnico'
                        WHEN 'investigacion' THEN 'Investigación'
+                       WHEN 'mantenimiento' THEN 'Mantenimiento'
+                       WHEN 'limpieza' THEN 'Limpieza'
+                       WHEN 'reparaciones' THEN 'Reparaciones'
+                       WHEN 'eventos' THEN 'Eventos'
                        WHEN 'otros' THEN 'Otros'
                        ELSE h.work_type
-                   END as work_type
-            FROM work_hours h 
+                   END as work_type_display
+            FROM horas_trabajadas h 
             WHERE h.user_id = ? 
             ORDER BY h.work_date DESC, h.created_at DESC
         ");
         $stmt->execute([$user_id]);
         $hours = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Get total hours for current month
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(hours_worked), 0) as total_hours
-            FROM work_hours 
+            FROM horas_trabajadas 
             WHERE user_id = ? 
             AND YEAR(work_date) = YEAR(CURDATE()) 
             AND MONTH(work_date) = MONTH(CURDATE())
         ");
         $stmt->execute([$user_id]);
         $totalHoursResult = $stmt->fetch(PDO::FETCH_ASSOC);
-        $totalHoursMonth = $totalHoursResult['total_hours'] ?? 0;
+        $totalHoursMonth = floatval($totalHoursResult['total_hours'] ?? 0);
         
-        // Get current month name
+        $currentBalance = floatval($updatedUserData['account_balance']);
+        $monthlyFee = floatval($updatedUserData['monthly_fee']);
+        $paymentProgress = min(($currentBalance / $monthlyFee) * 100, 100);
+        $paymentStatus = getPaymentStatus($currentBalance, $monthlyFee);
+        
         $currentMonth = date('F Y');
         $monthNames = [
             'January' => 'Enero', 'February' => 'Febrero', 'March' => 'Marzo',
@@ -178,81 +284,122 @@ function handleGetUserData($pdo) {
             $currentMonth = str_replace($en, $es, $currentMonth);
         }
         
-        respondWithSuccess("Data loaded successfully", [
+        respondWithSuccess("Datos cargados exitosamente", [
             'payments' => $payments,
             'hours' => $hours,
             'total_hours_month' => $totalHoursMonth,
-            'current_month' => $currentMonth
+            'current_month' => $currentMonth,
+            'payment_info' => [
+                'current_balance' => $currentBalance,
+                'monthly_fee' => $monthlyFee,
+                'payment_progress' => $paymentProgress,
+                'payment_status' => $paymentStatus,
+                'balance_formatted' => number_format($currentBalance, 0, ',', '.'),
+                'monthly_fee_formatted' => number_format($monthlyFee, 0, ',', '.')
+            ]
         ]);
         
     } catch (PDOException $e) {
-        error_log("Database error in handleGetUserData: " . $e->getMessage());
-        respondWithError("Error loading user data");
+        respondWithError("Error al cargar datos del usuario");
+    }
+}
+
+function processMonthlyReset($pdo, $user_id, $userData) {
+    $currentMonth = date('Y-m-01');
+    $lastReset = $userData['last_balance_reset'];
+    $currentBalance = floatval($userData['account_balance']);
+    $monthlyFee = floatval($userData['monthly_fee']);
+    
+    if (($lastReset === null || $lastReset < $currentMonth) && $currentBalance >= $monthlyFee) {
+        $stmt = $pdo->prepare("
+            UPDATE usuario 
+            SET account_balance = account_balance - ?, 
+                last_balance_reset = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$monthlyFee, $currentMonth, $user_id]);
+    }
+}
+
+function getPaymentStatus($balance, $monthlyFee) {
+    if ($balance >= $monthlyFee) {
+        return 'Al día';
+    } elseif ($balance > 0) {
+        return 'Pago parcial';
+    } else {
+        return 'Pendiente';
     }
 }
 
 function handleUploadPayment($pdo) {
-    if (!isset($_POST['user_id']) || !isset($_FILES['payment_file'])) {
-        respondWithError("Missing required fields");
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
+    if (!isset($_FILES['payment_file']) || !isset($_POST['payment_amount'])) {
+        respondWithError("Faltan campos requeridos");
     }
     
-    $user_id = intval($_POST['user_id']);
     $payment_month = $_POST['payment_month'] ?? '';
     $payment_year = $_POST['payment_year'] ?? '';
+    $payment_amount = floatval($_POST['payment_amount']);
     $description = $_POST['payment_description'] ?? '';
     
-    if ($user_id <= 0 || empty($payment_month) || empty($payment_year)) {
-        respondWithError("Invalid input data");
+    if (empty($payment_month) || empty($payment_year) || $payment_amount <= 0) {
+        respondWithError("Datos de entrada inválidos");
+    }
+    
+    if ($payment_amount < 1000 || $payment_amount > 1000000) {
+        respondWithError("El importe debe estar entre $1.000 y $1.000.000");
     }
     
     $file = $_FILES['payment_file'];
     
-    // Validate file
     if ($file['error'] !== UPLOAD_ERR_OK) {
-        respondWithError("Error uploading file");
+        respondWithError("Error al cargar el archivo: " . $file['error']);
     }
+    
+    $fileInfo = finfo_open(FILEINFO_MIME_TYPE);
+    $detectedType = finfo_file($fileInfo, $file['tmp_name']);
+    finfo_close($fileInfo);
     
     $allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-    if (!in_array($file['type'], $allowedTypes)) {
-        respondWithError("File type not allowed. Only PDF, JPG, and PNG files are accepted");
+    if (!in_array($detectedType, $allowedTypes)) {
+        respondWithError("Tipo de archivo no permitido. Solo se aceptan archivos PDF, JPG y PNG");
     }
     
-    if ($file['size'] > 5 * 1024 * 1024) { // 5MB limit
-        respondWithError("File too large. Maximum size is 5MB");
+    if ($file['size'] > 5 * 1024 * 1024) {
+        respondWithError("Archivo muy grande. El tamaño máximo es 5MB");
     }
     
     try {
-        // Check if payment for this month/year already exists
         $stmt = $pdo->prepare("
-            SELECT id FROM payment_receipts 
+            SELECT id FROM comprobantes_pago 
             WHERE user_id = ? AND payment_month = ? AND payment_year = ?
         ");
         $stmt->execute([$user_id, $payment_month, $payment_year]);
         
         if ($stmt->fetch()) {
-            respondWithError("A payment receipt for this month/year already exists");
+            respondWithError("Ya existe un comprobante de pago para este mes/año");
         }
         
-        // Create uploads directory if it doesn't exist
-        $uploadDir = 'uploads/payments/';
+        $uploadDir = 'uploads/comprobantes/';
         if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+            if (!mkdir($uploadDir, 0755, true)) {
+                respondWithError("No se pudo crear el directorio de uploads");
+            }
         }
         
-        // Generate unique filename
         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $filename = 'payment_' . $user_id . '_' . $payment_year . '_' . $payment_month . '_' . uniqid() . '.' . $extension;
+        $filename = 'comprobante_' . $user_id . '_' . $payment_year . '_' . $payment_month . '_' . uniqid() . '.' . $extension;
         $filepath = $uploadDir . $filename;
         
-        // Move uploaded file
         if (!move_uploaded_file($file['tmp_name'], $filepath)) {
-            respondWithError("Error saving file");
+            respondWithError("Error al guardar el archivo");
         }
         
-        // Save to database
         $stmt = $pdo->prepare("
-            INSERT INTO payment_receipts (user_id, payment_month, payment_year, file_path, file_name, file_type, file_size, description, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+            INSERT INTO comprobantes_pago (user_id, payment_month, payment_year, file_path, file_name, file_type, file_size, description, payment_amount, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', NOW())
         ");
         
         $stmt->execute([
@@ -261,200 +408,315 @@ function handleUploadPayment($pdo) {
             $payment_year,
             $filepath,
             $file['name'],
-            $file['type'],
+            $detectedType,
             $file['size'],
-            $description
+            $description,
+            $payment_amount
         ]);
         
-        respondWithSuccess("Payment receipt uploaded successfully");
+        respondWithSuccess("Comprobante de pago subido exitosamente. Pendiente de aprobación.");
         
     } catch (PDOException $e) {
-        error_log("Database error in handleUploadPayment: " . $e->getMessage());
-        respondWithError("Error saving payment receipt");
+        if (isset($filepath) && file_exists($filepath)) {
+            unlink($filepath);
+        }
+        respondWithError("Error al guardar el comprobante de pago");
+    }
+}
+
+function handleGetPaymentSummary($pdo) {
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                account_balance,
+                monthly_fee,
+                last_balance_reset,
+                (SELECT COALESCE(SUM(payment_amount), 0) 
+                 FROM comprobantes_pago 
+                 WHERE user_id = ? AND status = 'aprobado' 
+                 AND YEAR(created_at) = YEAR(CURDATE()) 
+                 AND MONTH(created_at) = MONTH(CURDATE())
+                ) as this_month_payments,
+                (SELECT COALESCE(SUM(payment_amount), 0) 
+                 FROM comprobantes_pago 
+                 WHERE user_id = ? AND status = 'pendiente'
+                ) as pending_payments
+            FROM usuario 
+            WHERE id = ?
+        ");
+        $stmt->execute([$user_id, $user_id, $user_id]);
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$summary) {
+            respondWithError("Usuario no encontrado");
+        }
+        
+        $currentBalance = floatval($summary['account_balance']);
+        $monthlyFee = floatval($summary['monthly_fee']);
+        $thisMonthPayments = floatval($summary['this_month_payments']);
+        $pendingPayments = floatval($summary['pending_payments']);
+        
+        $paymentProgress = min(($currentBalance / $monthlyFee) * 100, 100);
+        $paymentStatus = getPaymentStatus($currentBalance, $monthlyFee);
+        
+        respondWithSuccess("Resumen de pagos obtenido", [
+            'current_balance' => $currentBalance,
+            'monthly_fee' => $monthlyFee,
+            'this_month_payments' => $thisMonthPayments,
+            'pending_payments' => $pendingPayments,
+            'payment_progress' => $paymentProgress,
+            'payment_status' => $paymentStatus,
+            'balance_formatted' => number_format($currentBalance, 0, ',', '.'),
+            'monthly_fee_formatted' => number_format($monthlyFee, 0, ',', '.'),
+            'this_month_formatted' => number_format($thisMonthPayments, 0, ',', '.'),
+            'pending_formatted' => number_format($pendingPayments, 0, ',', '.')
+        ]);
+        
+    } catch (PDOException $e) {
+        respondWithError("Error al obtener resumen de pagos");
+    }
+}
+
+function handleAddBalance($pdo) {
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['amount'])) {
+        respondWithError("Faltan campos requeridos");
+    }
+    
+    $amount = floatval($input['amount']);
+    $description = $input['description'] ?? 'Ingreso manual de saldo';
+    
+    if ($amount <= 0) {
+        respondWithError("Datos inválidos");
+    }
+    
+    if ($amount < 100 || $amount > 500000) {
+        respondWithError("El monto debe estar entre $100 y $500.000");
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE usuario 
+            SET account_balance = account_balance + ? 
+            WHERE id = ?
+        ");
+        $stmt->execute([$amount, $user_id]);
+        
+        $stmt = $pdo->prepare("SELECT account_balance FROM usuario WHERE id = ?");
+        $stmt->execute([$user_id]);
+        $newBalance = $stmt->fetchColumn();
+        
+        respondWithSuccess("Saldo agregado exitosamente", [
+            'new_balance' => $newBalance,
+            'added_amount' => $amount,
+            'balance_formatted' => number_format($newBalance, 0, ',', '.'),
+            'added_formatted' => number_format($amount, 0, ',', '.')
+        ]);
+        
+    } catch (PDOException $e) {
+        respondWithError("Error al agregar saldo");
     }
 }
 
 function handleRegisterHours($pdo) {
-    // Get JSON input
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
     $input = json_decode(file_get_contents('php://input'), true);
     
-    if (!$input || !isset($input['user_id']) || !isset($input['work_date']) || 
+    if (!$input || !isset($input['work_date']) || 
         !isset($input['hours_worked']) || !isset($input['description']) || !isset($input['work_type'])) {
-        respondWithError("Missing required fields");
+        respondWithError("Faltan campos requeridos");
     }
     
-    $user_id = intval($input['user_id']);
     $work_date = $input['work_date'];
     $hours_worked = floatval($input['hours_worked']);
     $description = trim($input['description']);
     $work_type = $input['work_type'];
     
-    // Validate input
-    if ($user_id <= 0) {
-        respondWithError("Invalid user ID");
-    }
-    
     if ($hours_worked <= 0 || $hours_worked > 24) {
-        respondWithError("Hours worked must be between 0.5 and 24");
+        respondWithError("Las horas trabajadas deben estar entre 0.5 y 24");
     }
     
     if (empty($description)) {
-        respondWithError("Description is required");
+        respondWithError("La descripción es requerida");
     }
     
     if (empty($work_type)) {
-        respondWithError("Work type is required");
+        respondWithError("El tipo de trabajo es requerido");
     }
     
-    // Validate date
     if (!DateTime::createFromFormat('Y-m-d', $work_date)) {
-        respondWithError("Invalid date format");
+        respondWithError("Formato de fecha inválido");
     }
     
     if ($work_date > date('Y-m-d')) {
-        respondWithError("Cannot register hours for future dates");
+        respondWithError("No se pueden registrar horas para fechas futuras");
     }
     
     try {
-        // Check if hours for this date already exist
         $stmt = $pdo->prepare("
-            SELECT id FROM work_hours 
+            SELECT id FROM horas_trabajadas 
             WHERE user_id = ? AND work_date = ?
         ");
         $stmt->execute([$user_id, $work_date]);
         
         if ($stmt->fetch()) {
-            respondWithError("Hours for this date have already been registered");
+            respondWithError("Ya existen horas registradas para esta fecha");
         }
         
-        // Insert new hours record
         $stmt = $pdo->prepare("
-            INSERT INTO work_hours (user_id, work_date, hours_worked, description, work_type, created_at)
+            INSERT INTO horas_trabajadas (user_id, work_date, hours_worked, description, work_type, created_at)
             VALUES (?, ?, ?, ?, ?, NOW())
         ");
         
         $stmt->execute([$user_id, $work_date, $hours_worked, $description, $work_type]);
         
-        respondWithSuccess("Hours registered successfully");
+        respondWithSuccess("Horas registradas exitosamente");
         
     } catch (PDOException $e) {
-        error_log("Database error in handleRegisterHours: " . $e->getMessage());
-        respondWithError("Error registering hours");
+        respondWithError("Error al registrar las horas trabajadas");
     }
 }
 
 function handleDeletePayment($pdo) {
-    // Get JSON input
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
     $input = json_decode(file_get_contents('php://input'), true);
     
-    if (!$input || !isset($input['payment_id']) || !isset($input['user_id'])) {
-        respondWithError("Missing required fields");
+    if (!$input || !isset($input['payment_id'])) {
+        respondWithError("Faltan campos requeridos");
     }
     
     $payment_id = intval($input['payment_id']);
-    $user_id = intval($input['user_id']);
     
-    if ($payment_id <= 0 || $user_id <= 0) {
-        respondWithError("Invalid input data");
+    if ($payment_id <= 0) {
+        respondWithError("Datos inválidos");
     }
     
     try {
-        // Get file path before deleting
-        $stmt = $pdo->prepare("SELECT file_path FROM payment_receipts WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("
+            SELECT file_path FROM comprobantes_pago 
+            WHERE id = ? AND user_id = ?
+        ");
         $stmt->execute([$payment_id, $user_id]);
         $payment = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$payment) {
-            respondWithError("Payment receipt not found");
+            respondWithError("Comprobante no encontrado");
         }
         
-        // Delete from database
-        $stmt = $pdo->prepare("DELETE FROM payment_receipts WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("
+            DELETE FROM comprobantes_pago 
+            WHERE id = ? AND user_id = ?
+        ");
         $stmt->execute([$payment_id, $user_id]);
         
-        if ($stmt->rowCount() === 0) {
-            respondWithError("Payment receipt not found or access denied");
-        }
-        
-        // Delete file from filesystem
         if (file_exists($payment['file_path'])) {
             unlink($payment['file_path']);
         }
         
-        respondWithSuccess("Payment receipt deleted successfully");
+        respondWithSuccess("Comprobante de pago eliminado exitosamente");
         
     } catch (PDOException $e) {
-        error_log("Database error in handleDeletePayment: " . $e->getMessage());
-        respondWithError("Error deleting payment receipt");
+        respondWithError("Error al eliminar el comprobante de pago");
     }
 }
 
 function handleDeleteHours($pdo) {
-    // Get JSON input
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
     $input = json_decode(file_get_contents('php://input'), true);
     
-    if (!$input || !isset($input['hours_id']) || !isset($input['user_id'])) {
-        respondWithError("Missing required fields");
+    if (!$input || !isset($input['hours_id'])) {
+        respondWithError("Faltan campos requeridos");
     }
     
     $hours_id = intval($input['hours_id']);
-    $user_id = intval($input['user_id']);
     
-    if ($hours_id <= 0 || $user_id <= 0) {
-        respondWithError("Invalid input data");
+    if ($hours_id <= 0) {
+        respondWithError("Datos inválidos");
     }
     
     try {
-        // Delete hours record
-        $stmt = $pdo->prepare("DELETE FROM work_hours WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("
+            DELETE FROM horas_trabajadas 
+            WHERE id = ? AND user_id = ?
+        ");
         $stmt->execute([$hours_id, $user_id]);
         
         if ($stmt->rowCount() === 0) {
-            respondWithError("Hours record not found or access denied");
+            respondWithError("Registro de horas no encontrado");
         }
         
-        respondWithSuccess("Hours record deleted successfully");
+        respondWithSuccess("Registro de horas eliminado exitosamente");
         
     } catch (PDOException $e) {
-        error_log("Database error in handleDeleteHours: " . $e->getMessage());
-        respondWithError("Error deleting hours record");
+        respondWithError("Error al eliminar el registro de horas");
     }
 }
 
 function handleDownloadPayment($pdo) {
-    if (!isset($_GET['id']) || !isset($_GET['user_id'])) {
-        die("Missing parameters");
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
+    if (!isset($_GET['payment_id'])) {
+        respondWithError("Faltan parámetros requeridos");
     }
     
-    $payment_id = intval($_GET['id']);
-    $user_id = intval($_GET['user_id']);
+    $payment_id = intval($_GET['payment_id']);
     
-    if ($payment_id <= 0 || $user_id <= 0) {
-        die("Invalid parameters");
+    if ($payment_id <= 0) {
+        respondWithError("Parámetros inválidos");
     }
     
     try {
-        $stmt = $pdo->prepare("SELECT file_path, file_name, file_type FROM payment_receipts WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("
+            SELECT file_path, file_name, file_type 
+            FROM comprobantes_pago 
+            WHERE id = ? AND user_id = ?
+        ");
         $stmt->execute([$payment_id, $user_id]);
         $payment = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        if (!$payment || !file_exists($payment['file_path'])) {
-            die("File not found");
+        if (!$payment) {
+            respondWithError("Comprobante no encontrado");
         }
         
-        // Set appropriate headers for file download
-        header('Content-Type: ' . $payment['file_type']);
-        header('Content-Disposition: attachment; filename="' . $payment['file_name'] . '"');
-        header('Content-Length: ' . filesize($payment['file_path']));
-        header('Cache-Control: private');
+        $filePath = $payment['file_path'];
+        $fileName = $payment['file_name'];
+        $fileType = $payment['file_type'];
         
-        // Output file
-        readfile($payment['file_path']);
+        if (!file_exists($filePath)) {
+            respondWithError("Archivo no encontrado en el servidor");
+        }
+        
+        header('Content-Description: File Transfer');
+        header('Content-Type: ' . $fileType);
+        header('Content-Disposition: attachment; filename="' . basename($fileName) . '"');
+        header('Content-Transfer-Encoding: binary');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($filePath));
+        
+        ob_clean();
+        flush();
+        readfile($filePath);
         exit();
         
     } catch (PDOException $e) {
-        error_log("Database error in handleDownloadPayment: " . $e->getMessage());
-        die("Error accessing file");
+        respondWithError("Error al descargar el archivo");
     }
 }
+
 ?>

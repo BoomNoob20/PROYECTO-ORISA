@@ -1,6 +1,7 @@
 -- ========================================
 -- SCRIPT COMPLETO URBAN COOP DATABASE
--- Versión corregida usando tabla 'usuario' 
+-- Sistema Integrado con Gestión de Pagos y Saldos
+-- Versión unificada y completa
 -- Compatible con admin.php
 -- ========================================
 
@@ -15,10 +16,15 @@ USE usuarios_urban_coop;
 -- ELIMINAR TABLAS EXISTENTES (solo si hay problemas)
 -- Descomenta las siguientes líneas solo si necesitas empezar desde cero
 -- ========================================
+-- DROP VIEW IF EXISTS user_payment_summary;
+-- DROP PROCEDURE IF EXISTS ProcessMonthlyPayments;
 -- DROP TABLE IF EXISTS comprobantes_pago;
 -- DROP TABLE IF EXISTS horas_trabajadas;
 -- DROP TABLE IF EXISTS usuario;
 
+-- ========================================
+-- CREAR TABLA PRINCIPAL DE USUARIOS
+-- ========================================
 CREATE TABLE IF NOT EXISTS usuario (
     id INT(11) NOT NULL AUTO_INCREMENT,
     usr_name VARCHAR(100) NOT NULL COMMENT 'Nombre del usuario',
@@ -29,11 +35,15 @@ CREATE TABLE IF NOT EXISTS usuario (
     usr_phone INT(11) NOT NULL COMMENT 'Teléfono',
     is_admin INT(11) NOT NULL DEFAULT 0 COMMENT '0=Usuario normal, 1=Administrador',
     estado INT(11) NOT NULL DEFAULT 1 COMMENT '1=Pendiente, 2=Aprobado, 3=Rechazado',
+    account_balance DECIMAL(10,2) DEFAULT 0.00 COMMENT 'Saldo actual en cuenta del usuario',
+    monthly_fee DECIMAL(10,2) DEFAULT 22000.00 COMMENT 'Cuota mensual que debe pagar',
+    last_balance_reset DATE NULL COMMENT 'Última fecha de reset de saldo mensual',
     PRIMARY KEY (id),
     UNIQUE KEY usr_email (usr_email),
     UNIQUE KEY usr_ci (usr_ci),
     INDEX idx_estado (estado),
-    INDEX idx_admin (is_admin)
+    INDEX idx_admin (is_admin),
+    INDEX idx_account_balance (account_balance)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Tabla principal de usuarios del sistema Urban Coop';
 
@@ -71,6 +81,9 @@ CREATE TABLE IF NOT EXISTS comprobantes_pago (
     file_type VARCHAR(50) NOT NULL COMMENT 'Tipo MIME del archivo',
     description TEXT COMMENT 'Descripción opcional del comprobante',
     status ENUM('pendiente', 'aprobado', 'rechazado') DEFAULT 'pendiente' COMMENT 'Estado del comprobante',
+    payment_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT 'Importe del pago realizado',
+    processed TINYINT(1) DEFAULT 0 COMMENT '1 si el pago ya fue procesado al saldo',
+    processed_date TIMESTAMP NULL COMMENT 'Fecha cuando se procesó el pago',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de subida',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha de última actualización',
     PRIMARY KEY (id),
@@ -79,36 +92,123 @@ CREATE TABLE IF NOT EXISTS comprobantes_pago (
     INDEX idx_user_id (user_id),
     INDEX idx_status (status),
     INDEX idx_payment_date (payment_year, payment_month),
-    INDEX idx_file_type (file_type)
+    INDEX idx_file_type (file_type),
+    INDEX idx_payment_amount (payment_amount),
+    INDEX idx_processed (processed)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Comprobantes de pago subidos por los usuarios';
+
+-- ========================================
+-- CREAR PROCEDIMIENTO PARA PROCESAR PAGOS
+-- ========================================
+DELIMITER //
+CREATE PROCEDURE ProcessMonthlyPayments()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE user_id_var INT;
+    DECLARE current_balance DECIMAL(10,2);
+    DECLARE monthly_fee_var DECIMAL(10,2);
+    DECLARE last_reset DATE;
+    
+    DECLARE user_cursor CURSOR FOR 
+        SELECT id, account_balance, monthly_fee, last_balance_reset 
+        FROM usuario 
+        WHERE estado = 2; -- Solo usuarios aprobados
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    OPEN user_cursor;
+    
+    read_loop: LOOP
+        FETCH user_cursor INTO user_id_var, current_balance, monthly_fee_var, last_reset;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Si es un nuevo mes y el usuario tiene saldo suficiente
+        IF (last_reset IS NULL OR last_reset < DATE_FORMAT(NOW(), '%Y-%m-01')) 
+           AND current_balance >= monthly_fee_var THEN
+            
+            -- Descontar cuota mensual
+            UPDATE usuario 
+            SET account_balance = account_balance - monthly_fee_var,
+                last_balance_reset = DATE_FORMAT(NOW(), '%Y-%m-01')
+            WHERE id = user_id_var;
+            
+        END IF;
+    END LOOP;
+    
+    CLOSE user_cursor;
+    
+    -- Procesar comprobantes pendientes aprobados
+    UPDATE usuario u
+    INNER JOIN comprobantes_pago p ON u.id = p.user_id
+    SET u.account_balance = u.account_balance + p.payment_amount,
+        p.processed = 1,
+        p.processed_date = NOW()
+    WHERE p.status = 'aprobado' 
+    AND p.processed = 0;
+    
+END//
+DELIMITER ;
+
+-- ========================================
+-- CREAR VISTA PARA RESUMEN DE PAGOS
+-- ========================================
+CREATE OR REPLACE VIEW user_payment_summary AS
+SELECT 
+    u.id,
+    u.usr_name,
+    u.usr_surname,
+    u.account_balance,
+    u.monthly_fee,
+    u.last_balance_reset,
+    COALESCE(SUM(CASE WHEN p.status = 'aprobado' AND p.processed = 1 THEN p.payment_amount ELSE 0 END), 0) as total_processed_payments,
+    COALESCE(SUM(CASE WHEN p.status = 'pendiente' THEN p.payment_amount ELSE 0 END), 0) as pending_payments,
+    COALESCE(COUNT(CASE WHEN p.status = 'aprobado' THEN 1 END), 0) as approved_payments_count,
+    CASE 
+        WHEN u.account_balance >= u.monthly_fee THEN 'Al día'
+        WHEN u.account_balance > 0 THEN 'Pago parcial'
+        ELSE 'Pendiente'
+    END as payment_status
+FROM usuario u
+LEFT JOIN comprobantes_pago p ON u.id = p.user_id
+WHERE u.estado = 2
+GROUP BY u.id, u.usr_name, u.usr_surname, u.account_balance, u.monthly_fee, u.last_balance_reset;
 
 -- ========================================
 -- INSERTAR DATOS DE EJEMPLO
 -- ========================================
 
--- Usuario administrador
-INSERT INTO usuario (usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado) 
-VALUES ('a', 'b', 'ab@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 12345678, 99999999, 1, 2)
+-- Usuario administrador con saldo
+INSERT INTO usuario (usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado, account_balance, monthly_fee, last_balance_reset) 
+VALUES ('a', 'b', 'ab@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 12345678, 99999999, 1, 2, 25000.00, 22000.00, DATE_FORMAT(NOW(), '%Y-%m-01'))
 ON DUPLICATE KEY UPDATE 
     usr_name = VALUES(usr_name),
     usr_surname = VALUES(usr_surname),
     is_admin = VALUES(is_admin),
-    estado = VALUES(estado);
+    estado = VALUES(estado),
+    account_balance = VALUES(account_balance),
+    monthly_fee = VALUES(monthly_fee),
+    last_balance_reset = VALUES(last_balance_reset);
 
--- Usuarios pendientes de ejemplo
-INSERT INTO usuario (usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado) VALUES 
-('Pedro', 'Garfhone', 'pedro@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 24966853, 93658842, 0, 1),
-('María', 'González', 'maria@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 25123456, 94567890, 0, 1),
-('Juan', 'Pérez', 'juan@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 26789012, 95123456, 0, 1),
-('Ana', 'López', 'ana@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 27345678, 96789012, 0, 1),
-('Carlos', 'Rodríguez', 'carlos@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 28901234, 97345678, 0, 1),
-('Laura', 'Martínez', 'laura@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 29567890, 98901234, 0, 1),
-('Diego', 'Fernández', 'diego@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 30123456, 99567890, 0, 1),
-('Sofia', 'Torres', 'sofia@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 31789012, 91234567, 0, 1)
-ON DUPLICATE KEY UPDATE usr_name = VALUES(usr_name);
+-- Usuarios pendientes de ejemplo con diferentes saldos
+INSERT INTO usuario (usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado, account_balance, monthly_fee, last_balance_reset) VALUES 
+('Pedro', 'Garfhone', 'pedro@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 24966853, 93658842, 0, 1, 0.00, 22000.00, NULL),
+('María', 'González', 'maria@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 25123456, 94567890, 0, 1, 22000.00, 22000.00, DATE_FORMAT(NOW(), '%Y-%m-01')),
+('Juan', 'Pérez', 'juan@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 26789012, 95123456, 0, 1, 15000.00, 22000.00, NULL),
+('Ana', 'López', 'ana@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 27345678, 96789012, 0, 1, 0.00, 22000.00, NULL),
+('Carlos', 'Rodríguez', 'carlos@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 28901234, 97345678, 0, 1, 44000.00, 22000.00, DATE_FORMAT(NOW(), '%Y-%m-01')),
+('Laura', 'Martínez', 'laura@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 29567890, 98901234, 0, 1, 0.00, 22000.00, NULL),
+('Diego', 'Fernández', 'diego@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 30123456, 99567890, 0, 1, 0.00, 22000.00, NULL),
+('Sofia', 'Torres', 'sofia@gmail.com', 'e10adc3949ba59abbe56e057f20f883e', 31789012, 91234567, 0, 1, 0.00, 22000.00, NULL)
+ON DUPLICATE KEY UPDATE 
+    usr_name = VALUES(usr_name),
+    account_balance = VALUES(account_balance),
+    monthly_fee = VALUES(monthly_fee),
+    last_balance_reset = VALUES(last_balance_reset);
 
--- Horas trabajadas de ejemplo (algunas ya procesadas para mostrar diferentes estados)
+-- Horas trabajadas de ejemplo
 INSERT INTO horas_trabajadas (user_id, work_date, hours_worked, description, work_type) VALUES 
 (9, '2025-01-20', 6.5, 'Mantenimiento de jardines del área común principal', 'Mantenimiento'),
 (2, '2025-01-21', 4.0, 'Limpieza profunda del salón de eventos', 'Limpieza'),
@@ -120,21 +220,22 @@ INSERT INTO horas_trabajadas (user_id, work_date, hours_worked, description, wor
 (8, '2025-01-27', 4.5, 'Mantenimiento de ascensores [RECHAZADO]', 'Mantenimiento')
 ON DUPLICATE KEY UPDATE description = VALUES(description);
 
--- Comprobantes de pago de ejemplo
-INSERT INTO comprobantes_pago (user_id, payment_month, payment_year, file_name, file_path, file_size, file_type, description, status) VALUES
-(7, '01', '2025', 'comprobante_enero_pedro.pdf', 'uploads/comprobantes/1_01_2025.pdf', 245678, 'application/pdf', 'Comprobante de pago cooperativa enero 2025', 'pendiente'),
-(2, '01', '2025', 'pago_enero_maria.jpg', 'uploads/comprobantes/2_01_2025.jpg', 189432, 'image/jpeg', 'Transferencia bancaria enero 2025', 'pendiente'),
-(3, '12', '2024', 'diciembre_juan.pdf', 'uploads/comprobantes/3_12_2024.pdf', 321098, 'application/pdf', 'Último pago del año 2024', 'aprobado'),
-(4, '01', '2025', 'enero_ana.png', 'uploads/comprobantes/4_01_2025.png', 156789, 'image/png', 'Captura de transferencia enero', 'pendiente'),
-(5, '01', '2025', 'carlos_enero_2025.pdf', 'uploads/comprobantes/5_01_2025.pdf', 278945, 'application/pdf', 'Pago mensual cooperativa', 'pendiente'),
-(6, '12', '2024', 'laura_diciembre.jpg', 'uploads/comprobantes/6_12_2024.jpg', 203456, 'image/jpeg', 'Pago diciembre 2024', 'rechazado')
-ON DUPLICATE KEY UPDATE description = VALUES(description);
+-- Comprobantes de pago de ejemplo con importes
+INSERT INTO comprobantes_pago (user_id, payment_month, payment_year, file_name, file_path, file_size, file_type, description, status, payment_amount) VALUES
+(7, '01', '2025', 'comprobante_enero_pedro.pdf', 'uploads/comprobantes/1_01_2025.pdf', 245678, 'application/pdf', 'Comprobante de pago cooperativa enero 2025', 'pendiente', 22000.00),
+(2, '01', '2025', 'pago_enero_maria.jpg', 'uploads/comprobantes/2_01_2025.jpg', 189432, 'image/jpeg', 'Transferencia bancaria enero 2025', 'pendiente', 22000.00),
+(3, '12', '2024', 'diciembre_juan.pdf', 'uploads/comprobantes/3_12_2024.pdf', 321098, 'application/pdf', 'Último pago del año 2024', 'aprobado', 25000.00),
+(4, '01', '2025', 'enero_ana.png', 'uploads/comprobantes/4_01_2025.png', 156789, 'image/png', 'Captura de transferencia enero', 'pendiente', 20000.00),
+(5, '01', '2025', 'carlos_enero_2025.pdf', 'uploads/comprobantes/5_01_2025.pdf', 278945, 'application/pdf', 'Pago mensual cooperativa', 'pendiente', 22000.00),
+(6, '12', '2024', 'laura_diciembre.jpg', 'uploads/comprobantes/6_12_2024.jpg', 203456, 'image/jpeg', 'Pago diciembre 2024', 'rechazado', 15000.00)
+ON DUPLICATE KEY UPDATE 
+    description = VALUES(description),
+    payment_amount = VALUES(payment_amount);
 
 -- ========================================
 -- VERIFICACIÓN Y ESTADÍSTICAS
 -- ========================================
 
--- Mostrar resumen de la instalación
 SELECT '=== RESUMEN DE LA INSTALACIÓN ===' as info;
 
 -- Contar usuarios por estado
@@ -176,6 +277,18 @@ JOIN usuario u ON ht.user_id = u.id
 ORDER BY ht.work_date DESC
 LIMIT 10;
 
+-- Resumen de saldos por usuario
+SELECT 
+    'RESUMEN DE SALDOS' as categoria,
+    usr_name,
+    usr_surname,
+    CONCAT('$', FORMAT(account_balance, 0)) as saldo_actual,
+    CONCAT('$', FORMAT(monthly_fee, 0)) as cuota_mensual,
+    payment_status
+FROM user_payment_summary
+ORDER BY account_balance DESC
+LIMIT 10;
+
 -- Verificar tablas creadas
 SELECT 
     TABLE_NAME as 'Tabla',
@@ -186,4 +299,4 @@ FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = 'usuarios_urban_coop' 
 ORDER BY TABLE_NAME;
 
-SELECT '=== INSTALACIÓN COMPLETADA ===' as resultado;
+SELECT '=== INSTALACIÓN COMPLETADA EXITOSAMENTE ===' as resultado;

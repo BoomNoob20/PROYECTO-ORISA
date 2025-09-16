@@ -4,7 +4,7 @@ session_start();
 // Verificación de autenticación del lado del servidor
 function checkAdminAuth() {
     if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || $_SESSION['is_admin'] != 1) {
-        header('Location: ../loginLP.php');
+        header('Location: loginLP.php');
         exit();
     }
 }

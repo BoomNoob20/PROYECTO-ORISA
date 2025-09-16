@@ -61,12 +61,14 @@ function verifyJWT($token) {
 function getAuthToken() {
     $headers = getallheaders();
     
+    // Primero intentar desde headers Authorization
     if (isset($headers['Authorization'])) {
         if (preg_match('/Bearer\s+(.*)$/i', $headers['Authorization'], $matches)) {
             return $matches[1];
         }
     }
     
+    // Luego intentar desde parámetros POST/GET (para compatibilidad)
     return $_POST['token'] ?? $_GET['token'] ?? null;
 }
 
@@ -83,7 +85,15 @@ function requireAuth($pdo) {
         respondWithError("Token inválido o expirado", [], 401);
     }
     
-    $stmt = $pdo->prepare("SELECT id, estado, is_admin, name, surname FROM usuario WHERE id = ?");
+    // Buscar usuario con campos compatibles
+    $stmt = $pdo->prepare("
+        SELECT id, estado, is_admin, 
+               COALESCE(name, usr_name) as name, 
+               COALESCE(surname, usr_surname) as surname,
+               COALESCE(email, usr_email) as email
+        FROM usuario 
+        WHERE id = ?
+    ");
     $stmt->execute([$payload['user_id']]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -294,13 +304,13 @@ function handleGetUserData($pdo) {
                 'monthly_fee' => $monthlyFee,
                 'payment_progress' => $paymentProgress,
                 'payment_status' => $paymentStatus,
-                'balance_formatted' => number_format($currentBalance, 0, ',', '.'),
-                'monthly_fee_formatted' => number_format($monthlyFee, 0, ',', '.')
+                'balance_formatted' => '$' . number_format($currentBalance, 0, ',', '.'),
+                'monthly_fee_formatted' => '$' . number_format($monthlyFee, 0, ',', '.')
             ]
         ]);
         
     } catch (PDOException $e) {
-        respondWithError("Error al cargar datos del usuario");
+        respondWithError("Error al cargar datos del usuario: " . $e->getMessage());
     }
 }
 
@@ -424,107 +434,6 @@ function handleUploadPayment($pdo) {
     }
 }
 
-function handleGetPaymentSummary($pdo) {
-    $auth = requireAuth($pdo);
-    $user_id = $auth['payload']['user_id'];
-    
-    try {
-        $stmt = $pdo->prepare("
-            SELECT 
-                account_balance,
-                monthly_fee,
-                last_balance_reset,
-                (SELECT COALESCE(SUM(payment_amount), 0) 
-                 FROM comprobantes_pago 
-                 WHERE user_id = ? AND status = 'aprobado' 
-                 AND YEAR(created_at) = YEAR(CURDATE()) 
-                 AND MONTH(created_at) = MONTH(CURDATE())
-                ) as this_month_payments,
-                (SELECT COALESCE(SUM(payment_amount), 0) 
-                 FROM comprobantes_pago 
-                 WHERE user_id = ? AND status = 'pendiente'
-                ) as pending_payments
-            FROM usuario 
-            WHERE id = ?
-        ");
-        $stmt->execute([$user_id, $user_id, $user_id]);
-        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$summary) {
-            respondWithError("Usuario no encontrado");
-        }
-        
-        $currentBalance = floatval($summary['account_balance']);
-        $monthlyFee = floatval($summary['monthly_fee']);
-        $thisMonthPayments = floatval($summary['this_month_payments']);
-        $pendingPayments = floatval($summary['pending_payments']);
-        
-        $paymentProgress = min(($currentBalance / $monthlyFee) * 100, 100);
-        $paymentStatus = getPaymentStatus($currentBalance, $monthlyFee);
-        
-        respondWithSuccess("Resumen de pagos obtenido", [
-            'current_balance' => $currentBalance,
-            'monthly_fee' => $monthlyFee,
-            'this_month_payments' => $thisMonthPayments,
-            'pending_payments' => $pendingPayments,
-            'payment_progress' => $paymentProgress,
-            'payment_status' => $paymentStatus,
-            'balance_formatted' => number_format($currentBalance, 0, ',', '.'),
-            'monthly_fee_formatted' => number_format($monthlyFee, 0, ',', '.'),
-            'this_month_formatted' => number_format($thisMonthPayments, 0, ',', '.'),
-            'pending_formatted' => number_format($pendingPayments, 0, ',', '.')
-        ]);
-        
-    } catch (PDOException $e) {
-        respondWithError("Error al obtener resumen de pagos");
-    }
-}
-
-function handleAddBalance($pdo) {
-    $auth = requireAuth($pdo);
-    $user_id = $auth['payload']['user_id'];
-    
-    $input = json_decode(file_get_contents('php://input'), true);
-    
-    if (!$input || !isset($input['amount'])) {
-        respondWithError("Faltan campos requeridos");
-    }
-    
-    $amount = floatval($input['amount']);
-    $description = $input['description'] ?? 'Ingreso manual de saldo';
-    
-    if ($amount <= 0) {
-        respondWithError("Datos inválidos");
-    }
-    
-    if ($amount < 100 || $amount > 500000) {
-        respondWithError("El monto debe estar entre $100 y $500.000");
-    }
-    
-    try {
-        $stmt = $pdo->prepare("
-            UPDATE usuario 
-            SET account_balance = account_balance + ? 
-            WHERE id = ?
-        ");
-        $stmt->execute([$amount, $user_id]);
-        
-        $stmt = $pdo->prepare("SELECT account_balance FROM usuario WHERE id = ?");
-        $stmt->execute([$user_id]);
-        $newBalance = $stmt->fetchColumn();
-        
-        respondWithSuccess("Saldo agregado exitosamente", [
-            'new_balance' => $newBalance,
-            'added_amount' => $amount,
-            'balance_formatted' => number_format($newBalance, 0, ',', '.'),
-            'added_formatted' => number_format($amount, 0, ',', '.')
-        ]);
-        
-    } catch (PDOException $e) {
-        respondWithError("Error al agregar saldo");
-    }
-}
-
 function handleRegisterHours($pdo) {
     $auth = requireAuth($pdo);
     $user_id = $auth['payload']['user_id'];
@@ -583,6 +492,51 @@ function handleRegisterHours($pdo) {
         
     } catch (PDOException $e) {
         respondWithError("Error al registrar las horas trabajadas");
+    }
+}
+
+function handleAddBalance($pdo) {
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['amount'])) {
+        respondWithError("Faltan campos requeridos");
+    }
+    
+    $amount = floatval($input['amount']);
+    $description = $input['description'] ?? 'Ingreso manual de saldo';
+    
+    if ($amount <= 0) {
+        respondWithError("Datos inválidos");
+    }
+    
+    if ($amount < 100 || $amount > 500000) {
+        respondWithError("El monto debe estar entre $100 y $500.000");
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE usuario 
+            SET account_balance = account_balance + ? 
+            WHERE id = ?
+        ");
+        $stmt->execute([$amount, $user_id]);
+        
+        $stmt = $pdo->prepare("SELECT account_balance FROM usuario WHERE id = ?");
+        $stmt->execute([$user_id]);
+        $newBalance = $stmt->fetchColumn();
+        
+        respondWithSuccess("Saldo agregado exitosamente", [
+            'new_balance' => $newBalance,
+            'added_amount' => $amount,
+            'balance_formatted' => ' . number_format($newBalance, 0, ',', '.'),
+            'added_formatted' => ' . number_format($amount, 0, ',', '.')
+        ]);
+        
+    } catch (PDOException $e) {
+        respondWithError("Error al agregar saldo");
     }
 }
 
@@ -669,11 +623,8 @@ function handleDownloadPayment($pdo) {
     $auth = requireAuth($pdo);
     $user_id = $auth['payload']['user_id'];
     
-    if (!isset($_GET['payment_id'])) {
-        respondWithError("Faltan parámetros requeridos");
-    }
-    
-    $payment_id = intval($_GET['payment_id']);
+    // Aceptar payment_id desde GET o POST
+    $payment_id = intval($_GET['payment_id'] ?? $_POST['payment_id'] ?? 0);
     
     if ($payment_id <= 0) {
         respondWithError("Parámetros inválidos");
@@ -700,17 +651,20 @@ function handleDownloadPayment($pdo) {
             respondWithError("Archivo no encontrado en el servidor");
         }
         
-        header('Content-Description: File Transfer');
+        // Limpiar cualquier output previo
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Headers para descarga
         header('Content-Type: ' . $fileType);
         header('Content-Disposition: attachment; filename="' . basename($fileName) . '"');
-        header('Content-Transfer-Encoding: binary');
-        header('Expires: 0');
+        header('Content-Length: ' . filesize($filePath));
         header('Cache-Control: must-revalidate');
         header('Pragma: public');
-        header('Content-Length: ' . filesize($filePath));
+        header('Expires: 0');
         
-        ob_clean();
-        flush();
+        // Enviar archivo
         readfile($filePath);
         exit();
         
@@ -719,4 +673,58 @@ function handleDownloadPayment($pdo) {
     }
 }
 
-?>
+function handleGetPaymentSummary($pdo) {
+    $auth = requireAuth($pdo);
+    $user_id = $auth['payload']['user_id'];
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                account_balance,
+                monthly_fee,
+                last_balance_reset,
+                (SELECT COALESCE(SUM(payment_amount), 0) 
+                 FROM comprobantes_pago 
+                 WHERE user_id = ? AND status = 'aprobado' 
+                 AND YEAR(created_at) = YEAR(CURDATE()) 
+                 AND MONTH(created_at) = MONTH(CURDATE())
+                ) as this_month_payments,
+                (SELECT COALESCE(SUM(payment_amount), 0) 
+                 FROM comprobantes_pago 
+                 WHERE user_id = ? AND status = 'pendiente'
+                ) as pending_payments
+            FROM usuario 
+            WHERE id = ?
+        ");
+        $stmt->execute([$user_id, $user_id, $user_id]);
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$summary) {
+            respondWithError("Usuario no encontrado");
+        }
+        
+        $currentBalance = floatval($summary['account_balance']);
+        $monthlyFee = floatval($summary['monthly_fee']);
+        $thisMonthPayments = floatval($summary['this_month_payments']);
+        $pendingPayments = floatval($summary['pending_payments']);
+        
+        $paymentProgress = min(($currentBalance / $monthlyFee) * 100, 100);
+        $paymentStatus = getPaymentStatus($currentBalance, $monthlyFee);
+        
+        respondWithSuccess("Resumen de pagos obtenido", [
+            'current_balance' => $currentBalance,
+            'monthly_fee' => $monthlyFee,
+            'this_month_payments' => $thisMonthPayments,
+            'pending_payments' => $pendingPayments,
+            'payment_progress' => $paymentProgress,
+            'payment_status' => $paymentStatus,
+            'balance_formatted' => ' . number_format($currentBalance, 0, ',', '.'),
+            'monthly_fee_formatted' => ' . number_format($monthlyFee, 0, ',', '.'),
+            'this_month_formatted' => ' . number_format($thisMonthPayments, 0, ',', '.'),
+            'pending_formatted' => ' . number_format($pendingPayments, 0, ',', '.')
+        ]);
+        
+    } catch (PDOException $e) {
+        respondWithError("Error al obtener resumen de pagos");
+    }
+}

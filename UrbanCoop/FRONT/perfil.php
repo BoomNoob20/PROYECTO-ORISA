@@ -1,11 +1,9 @@
 <?php
-// perfil.php - Versión compatible con tu sistema actual (SIN JWT)
+// perfil.php - Versión frontend con redirección a FRONT/
+
 session_start();
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-// Configuración de base de datos
+// Configuración de base de datos para validación básica
 $host = 'localhost';
 $dbname = 'usuarios_urban_coop';
 $username = 'root';
@@ -18,19 +16,76 @@ try {
     die("Error de conexión: " . $e->getMessage());
 }
 
-// VALIDACIÓN DE SESIÓN SIMPLIFICADA
-function validateUserAccess() {
-    // Aquí puedes agregar tu lógica de validación actual
-    // Por ahora retorna true para testing
-    return true;
+// FUNCIÓN DE VALIDACIÓN DE SESIÓN SIMPLIFICADA
+function validateUserSession($pdo) {
+    // Para acceso directo desde admin
+    if (isset($_GET['user_id']) && isset($_GET['verify'])) {
+        $user_id = intval($_GET['user_id']);
+        $verify_token = $_GET['verify'];
+        
+        // Token simple para verificar que viene del admin
+        $expected_token = md5('admin_access_' . $user_id . date('Y-m-d'));
+        
+        if ($verify_token === $expected_token) {
+            try {
+                $stmt = $pdo->prepare("SELECT id, usr_name, usr_surname, estado, usr_email, is_admin FROM usuario WHERE id = ?");
+                $stmt->execute([$user_id]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($user) {
+                    return $user;
+                }
+            } catch(PDOException $e) {
+                return false;
+            }
+        }
+    }
+    
+    // Para usuarios normales, la validación principal se hace en JavaScript
+    return 'js_validation';
 }
 
-// Variables por defecto
+// VALIDAR AUTENTICACIÓN
+$current_user = validateUserSession($pdo);
+
+// Si la validación indica que debe manejarse por JavaScript, no bloqueamos aquí
+if ($current_user === false) {
+    header('Location: loginLP.php');
+    exit();
+}
+
+// Variables por defecto (se actualizarán por JavaScript)
 $user_name = 'Usuario';
-$user_status = 2;
-$user_id = 1; // ID de prueba - cambiar por tu lógica
+$user_status = 2; // Por defecto aprobado
+$user_id = 0;
 $can_access = true;
 
+// Si tenemos datos del usuario desde la URL (acceso desde admin)
+if (is_array($current_user)) {
+    $user_name = $current_user['usr_name'] . ' ' . $current_user['usr_surname'];
+    $user_status = $current_user['estado'];
+    $user_id = $current_user['id'];
+    
+    // Manejar diferentes estados del usuario
+    $status_message = '';
+    
+    switch ($user_status) {
+        case 1:
+            $status_message = 'Esperando la aprobación manual de un administrador';
+            $can_access = false;
+            break;
+        case 2:
+            $can_access = true;
+            break;
+        case 3:
+            $status_message = 'Usuario rechazado. Contacte con el administrador.';
+            $can_access = false;
+            break;
+        default:
+            $status_message = 'Estado de usuario desconocido';
+            $can_access = false;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -40,1593 +95,185 @@ $can_access = true;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Urban Coop - Dashboard</title>
     <link rel="stylesheet" href="CSS/perfilStyles.css">
-    <style>
-        /* ===== URBAN COOP - PERFIL STYLES ===== */
-/* Paleta de colores: Rojo (#DC143C), Blanco (#FFFFFF), Negro (#1a1a1a), Grises */
-
-/* === VARIABLES CSS === */
-:root {
-  /* Colores principales */
-  --color-primary: #DC143C;
-  --color-primary-dark: #B71C1C;
-  --color-primary-light: #FF5252;
-  --color-white: #FFFFFF;
-  --color-black: #1a1a1a;
-  --color-text: #2c2c2c;
-  --color-text-light: #6b6b6b;
-  
-  /* Colores de fondo */
-  --color-background: #fafafa;
-  --color-surface: #ffffff;
-  --color-surface-hover: #f5f5f5;
-  
-  /* Colores de borde */
-  --color-border: #e0e0e0;
-  --color-border-light: #f0f0f0;
-  --color-border-dark: #d0d0d0;
-  
-  /* Estados */
-  --color-success: #2e7d32;
-  --color-warning: #f57c00;
-  --color-error: var(--color-primary);
-  --color-info: #1976d2;
-  
-  /* Espaciado */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
-  --spacing-2xl: 48px;
-  
-  /* Tipografía */
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 16px;
-  --font-size-lg: 18px;
-  --font-size-xl: 24px;
-  --font-size-2xl: 32px;
-  
-  /* Sombras */
-  --shadow-sm: 0 2px 4px rgba(28, 28, 28, 0.1);
-  --shadow-md: 0 4px 12px rgba(28, 28, 28, 0.15);
-  --shadow-lg: 0 8px 24px rgba(28, 28, 28, 0.2);
-  
-  /* Bordes redondeados */
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-full: 50%;
-  
-  /* Transiciones */
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.3s ease;
-  --transition-slow: 0.5s ease;
-}
-
-/* === RESET Y BASE === */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html {
-  font-size: 16px;
-  scroll-behavior: smooth;
-}
-
-body {
-  font-family: var(--font-family);
-  font-size: var(--font-size-base);
-  line-height: 1.6;
-  color: var(--color-text);
-  background-color: var(--color-background);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* === LOADING SCREEN === */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: var(--color-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.loading-content {
-  text-align: center;
-}
-
-.loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid var(--color-border);
-  border-top: 4px solid var(--color-primary);
-  border-radius: var(--radius-full);
-  animation: spin 1s linear infinite;
-  margin: 0 auto var(--spacing-md);
-}
-
-.loading-text {
-  font-size: var(--font-size-lg);
-  font-weight: 500;
-  color: var(--color-text-light);
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* === LAYOUT PRINCIPAL === */
-.main-app {
-  display: none;
-}
-
-.app-container {
-  display: flex;
-  height: 100vh;
-  background: var(--color-background);
-}
-
-/* === SIDEBAR === */
-.sidebar {
-  width: 280px;
-  background: var(--color-black);
-  color: var(--color-white);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  box-shadow: var(--shadow-md);
-}
-
-.sidebar-header {
-  padding: var(--spacing-xl) var(--spacing-lg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.logo-container {
-  margin-bottom: var(--spacing-lg);
-}
-
-.logo {
-  width: 100%;
-  max-width: 160px;
-  height: auto;
-  object-fit: contain;
-}
-
-.search-container {
-  position: relative;
-}
-
-.search-input {
-  width: 100%;
-  padding: var(--spacing-md) var(--spacing-lg);
-  padding-right: 40px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-white);
-  font-size: var(--font-size-sm);
-  transition: var(--transition-normal);
-}
-
-.search-input::placeholder {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.search-input:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.3);
-}
-
-.search-icon {
-  position: absolute;
-  right: var(--spacing-md);
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.sidebar-nav {
-  padding: var(--spacing-lg);
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-normal);
-  position: relative;
-}
-
-.nav-item:hover {
-  background: rgba(220, 20, 60, 0.15);
-}
-
-.nav-item-icon {
-  margin-right: var(--spacing-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-item-text {
-  flex: 1;
-  font-weight: 500;
-}
-
-.nav-item-badge {
-  background: var(--color-primary);
-  color: var(--color-white);
-  border-radius: var(--radius-full);
-  padding: 2px var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
-}
-
-/* === MAIN CONTENT === */
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* === HEADER === */
-.app-header {
-  background: var(--color-white);
-  border-bottom: 1px solid var(--color-border);
-  padding: 0 var(--spacing-xl);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 70px;
-  box-shadow: var(--shadow-sm);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.header-nav {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.nav-button {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border: none;
-  background: transparent;
-  color: var(--color-text-light);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  transition: var(--transition-normal);
-  position: relative;
-}
-
-.nav-button:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-primary);
-}
-
-.nav-button.active {
-  background: var(--color-primary);
-  color: var(--color-white);
-}
-
-.nav-button.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--color-primary);
-}
-
-/* === PROFILE SECTION === */
-.profile-section {
-  position: relative;
-}
-
-.profile-dropdown {
-  position: relative;
-}
-
-.profile-button {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: var(--transition-normal);
-  color: var(--color-text);
-}
-
-.profile-button:hover {
-  background: var(--color-surface-hover);
-}
-
-.dropdown-arrow {
-  transition: var(--transition-fast);
-}
-
-.profile-dropdown.active .dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-.profile-menu {
-  position: absolute;
-  top: calc(100% + var(--spacing-sm));
-  right: 0;
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  min-width: 180px;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-10px);
-  transition: var(--transition-normal);
-  z-index: 1000;
-}
-
-.profile-menu.show {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.profile-menu-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  width: 100%;
-  padding: var(--spacing-md);
-  border: none;
-  background: transparent;
-  color: var(--color-text);
-  cursor: pointer;
-  transition: var(--transition-normal);
-  text-align: left;
-  font-size: var(--font-size-sm);
-}
-
-.profile-menu-item:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-primary);
-}
-
-/* === CONTENT WRAPPER === */
-.content-wrapper {
-  flex: 1;
-  padding: var(--spacing-xl);
-  overflow-y: auto;
-}
-
-.content-section {
-  display: none;
-}
-
-.content-section.active {
-  display: block;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-xl);
-}
-
-.section-title {
-  font-size: var(--font-size-2xl);
-  font-weight: 700;
-  color: var(--color-text);
-  margin: 0;
-}
-
-/* === BUTTONS === */
-.action-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border: 2px solid transparent;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: var(--transition-normal);
-  text-decoration: none;
-  position: relative;
-  overflow: hidden;
-}
-
-.action-button.primary {
-  background: var(--color-primary);
-  color: var(--color-white);
-  border-color: var(--color-primary);
-}
-
-.action-button.primary:hover {
-  background: var(--color-primary-dark);
-  border-color: var(--color-primary-dark);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.action-button.secondary {
-  background: transparent;
-  color: var(--color-text);
-  border-color: var(--color-border);
-}
-
-.action-button.secondary:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-border-dark);
-}
-
-.action-button.danger {
-  background: transparent;
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.action-button.danger:hover {
-  background: var(--color-primary);
-  color: var(--color-white);
-}
-
-.action-button.small {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-xs);
-}
-
-/* === SUMMARY GRID === */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
-}
-
-.summary-card {
-  background: var(--color-white);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-sm);
-  border-left: 4px solid var(--color-primary);
-  transition: var(--transition-normal);
-  position: relative;
-  overflow: hidden;
-}
-
-.summary-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-}
-
-.summary-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-lg);
-}
-
-.card-icon {
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  background: rgba(220, 20, 60, 0.1);
-  color: var(--color-primary);
-}
-
-.card-title {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text-light);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0;
-}
-
-.card-amount {
-  font-size: var(--font-size-2xl);
-  font-weight: 800;
-  color: var(--color-text);
-  margin-bottom: var(--spacing-sm);
-  line-height: 1.2;
-}
-
-.summary-card.balance .card-amount {
-  color: var(--color-success);
-}
-
-.summary-card.fee .card-amount {
-  color: var(--color-primary);
-}
-
-.card-status,
-.card-subtitle {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-light);
-  margin: 0;
-}
-
-/* === PROGRESS BAR === */
-.progress-container {
-  margin-bottom: var(--spacing-md);
-}
-
-.progress-bar {
-  width: 100%;
-  height: 12px;
-  background: var(--color-border-light);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  margin-bottom: var(--spacing-sm);
-  position: relative;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--color-success) 0%, var(--color-primary) 100%);
-  border-radius: var(--radius-sm);
-  transition: width var(--transition-slow);
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.progress-text {
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-  color: var(--color-text);
-  text-align: center;
-}
-
-/* === MESSAGES === */
-.messages-container {
-  margin-bottom: var(--spacing-lg);
-}
-
-.alert {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  border-left: 4px solid;
-  margin-bottom: var(--spacing-md);
-}
-
-.alert-success {
-  background-color: rgba(46, 125, 50, 0.1);
-  color: var(--color-success);
-  border-color: var(--color-success);
-}
-
-.alert-error {
-  background-color: rgba(220, 20, 60, 0.1);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.alert-warning {
-  background-color: rgba(245, 124, 0, 0.1);
-  color: var(--color-warning);
-  border-color: var(--color-warning);
-}
-
-/* === FORMS === */
-.form-modal {
-  display: none;
-  margin-bottom: var(--spacing-xl);
-}
-
-.form-container {
-  background: var(--color-white);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-}
-
-.form-header {
-  padding: var(--spacing-lg);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: var(--color-white);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.form-header h2 {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  margin: 0;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--color-white);
-  cursor: pointer;
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  transition: var(--transition-normal);
-}
-
-.close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.form-container form {
-  padding: var(--spacing-lg);
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-}
-
-.form-group {
-  margin-bottom: var(--spacing-lg);
-}
-
-.form-label {
-  display: block;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: var(--spacing-sm);
-}
-
-.form-input,
-.form-select,
-.form-textarea {
-  width: 100%;
-  padding: var(--spacing-md);
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family);
-  color: var(--color-text);
-  background: var(--color-white);
-  transition: var(--transition-normal);
-}
-
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.1);
-}
-
-.form-textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.form-hint {
-  display: block;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-light);
-  margin-top: var(--spacing-xs);
-}
-
-.amount-input {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.amount-symbol {
-  position: absolute;
-  left: var(--spacing-md);
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text-light);
-  z-index: 1;
-}
-
-.form-input.amount {
-  padding-left: 36px;
-  font-size: var(--font-size-base);
-  font-weight: 600;
-}
-
-.form-actions {
-  display: flex;
-  gap: var(--spacing-md);
-  justify-content: flex-end;
-  margin-top: var(--spacing-xl);
-  padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-border-light);
-}
-
-/* === UPLOAD ZONE === */
-.upload-zone {
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-2xl);
-  text-align: center;
-  cursor: pointer;
-  transition: var(--transition-normal);
-  margin-bottom: var(--spacing-lg);
-  position: relative;
-  overflow: hidden;
-  background: var(--color-surface);
-}
-
-.upload-zone:hover {
-  border-color: var(--color-primary);
-  background: rgba(220, 20, 60, 0.05);
-}
-
-.upload-zone.dragover {
-  border-color: var(--color-primary);
-  background: rgba(220, 20, 60, 0.1);
-  transform: scale(1.02);
-}
-
-.upload-icon {
-  color: var(--color-primary);
-  margin-bottom: var(--spacing-md);
-}
-
-.upload-text {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-xs) 0;
-}
-
-.upload-subtext {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-light);
-  margin: 0 0 var(--spacing-md) 0;
-}
-
-.upload-info {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-light);
-  margin: 0;
-}
-
-.upload-zone input[type="file"] {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-}
-
-/* === TASKS === */
-.task-container {
-  background: var(--color-white);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-}
-
-.task-item {
-  display: flex;
-  align-items: center;
-  padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border-light);
-  transition: var(--transition-normal);
-  position: relative;
-}
-
-.task-item:last-child {
-  border-bottom: none;
-}
-
-.task-item:hover {
-  background: var(--color-surface-hover);
-}
-
-.task-item.completed {
-  opacity: 0.6;
-}
-
-.task-item.completed .task-text {
-  text-decoration: line-through;
-  color: var(--color-text-light);
-}
-
-.task-checkbox-container {
-  position: relative;
-  margin-right: var(--spacing-md);
-}
-
-.task-checkbox {
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--color-border-dark);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-normal);
-}
-
-.task-checkbox:checked {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.checkbox-label {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.task-checkbox:checked + .checkbox-label::after {
-  content: '✓';
-  color: var(--color-white);
-  font-weight: bold;
-  font-size: var(--font-size-xs);
-}
-
-.task-text {
-  flex: 1;
-  font-size: var(--font-size-base);
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.task-actions {
-  display: flex;
-  gap: var(--spacing-sm);
-  opacity: 0;
-  transition: var(--transition-normal);
-}
-
-.task-item:hover .task-actions {
-  opacity: 1;
-}
-
-.task-action-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  transition: var(--transition-normal);
-  color: var(--color-text-light);
-}
-
-.task-action-btn:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-primary);
-}
-
-.star-btn.favorite {
-  color: var(--color-warning);
-}
-
-.star-btn.favorite svg {
-  fill: currentColor;
-}
-
-/* === PAYMENT CARDS === */
-.payments-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.payment-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--color-white);
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--color-border);
-  transition: var(--transition-normal);
-}
-
-.payment-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.payment-info {
-  flex: 1;
-}
-
-.payment-title {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-sm) 0;
-}
-
-.payment-details {
-  display: flex;
-  gap: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-light);
-}
-
-.payment-amount {
-  font-weight: 600;
-  color: var(--color-success);
-}
-
-.payment-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.payment-status {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.payment-status.pending {
-  background: rgba(245, 124, 0, 0.1);
-  color: var(--color-warning);
-}
-
-.payment-status.approved {
-  background: rgba(46, 125, 50, 0.1);
-  color: var(--color-success);
-}
-
-.payment-status.rejected {
-  background: rgba(220, 20, 60, 0.1);
-  color: var(--color-primary);
-}
-
-/* === HOURS === */
-.hours-summary {
-  background: var(--color-white);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: var(--spacing-xl);
-  border-left: 4px solid var(--color-info);
-}
-
-.summary-title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-md) 0;
-}
-
-.summary-stats {
-  display: flex;
-  gap: var(--spacing-xl);
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.stat-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-light);
-}
-
-.stat-value {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.hours-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.hours-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  background: var(--color-white);
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--color-border);
-  transition: var(--transition-normal);
-}
-
-.hours-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.hours-info {
-  flex: 1;
-}
-
-.hours-title {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-sm) 0;
-}
-
-.hours-type {
-  display: inline-block;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-primary);
-  color: var(--color-white);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: var(--spacing-sm);
-}
-
-.hours-description {
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  line-height: 1.6;
-  margin: 0 0 var(--spacing-sm) 0;
-}
-
-.hours-date {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-light);
-}
-
-.hours-actions {
-  margin-left: var(--spacing-lg);
-}
-
-/* === RESPONSIVE DESIGN === */
-@media (max-width: 1200px) {
-  .summary-grid {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
-  
-  .content-wrapper {
-    padding: var(--spacing-lg);
-  }
-}
-
-@media (max-width: 768px) {
-  .app-container {
-    flex-direction: column;
-  }
-  
-  .sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
-  }
-  
-  .sidebar-header {
-    padding: var(--spacing-lg);
-  }
-  
-  .sidebar-nav {
-    display: flex;
-    overflow-x: auto;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-lg);
-  }
-  
-  .nav-item {
-    flex-shrink: 0;
-    margin-bottom: 0;
-  }
-  
-  .app-header {
-    padding: var(--spacing-md) var(--spacing-lg);
-    height: 60px;
-  }
-  
-  .header-nav {
-    overflow-x: auto;
-    gap: var(--spacing-xs);
-  }
-  
-  .nav-button {
-    flex-shrink: 0;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--font-size-xs);
-  }
-  
-  .content-wrapper {
-    padding: var(--spacing-lg) var(--spacing-md);
-  }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--spacing-md);
-  }
-  
-  .section-title {
-    font-size: var(--font-size-xl);
-  }
-  
-  .summary-grid {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-md);
-  }
-  
-  .form-grid {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-md);
-  }
-  
-  .form-actions {
-    flex-direction: column;
-    gap: var(--spacing-sm);
-  }
-  
-  .action-button {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .payment-card,
-  .hours-card {
-    flex-direction: column;
-    gap: var(--spacing-md);
-    align-items: stretch;
-  }
-  
-  .payment-actions,
-  .hours-actions {
-    align-self: flex-end;
-  }
-  
-  .summary-stats {
-    flex-direction: column;
-    gap: var(--spacing-md);
-  }
-  
-  .profile-button span {
-    display: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .content-wrapper {
-    padding: var(--spacing-md);
-  }
-  
-  .form-container {
-    margin: 0 -var(--spacing-md);
-    border-radius: 0;
-  }
-  
-  .summary-card,
-  .task-container,
-  .payment-card,
-  .hours-card,
-  .hours-summary {
-    margin: 0 -var(--spacing-md);
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-  }
-  
-  .upload-zone {
-    padding: var(--spacing-lg);
-  }
-  
-  .section-title {
-    font-size: var(--font-size-lg);
-  }
-  
-  .card-amount {
-    font-size: var(--font-size-xl);
-  }
-}
-
-/* === UTILITIES === */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.text-left {
-  text-align: left;
-}
-
-.text-right {
-  text-align: right;
-}
-
-.d-none {
-  display: none !important;
-}
-
-.d-block {
-  display: block !important;
-}
-
-.d-flex {
-  display: flex !important;
-}
-
-.justify-center {
-  justify-content: center;
-}
-
-.align-center {
-  align-items: center;
-}
-
-.gap-sm {
-  gap: var(--spacing-sm);
-}
-
-.gap-md {
-  gap: var(--spacing-md);
-}
-
-.gap-lg {
-  gap: var(--spacing-lg);
-}
-
-.mb-0 {
-  margin-bottom: 0 !important;
-}
-
-.mb-sm {
-  margin-bottom: var(--spacing-sm) !important;
-}
-
-.mb-md {
-  margin-bottom: var(--spacing-md) !important;
-}
-
-.mb-lg {
-  margin-bottom: var(--spacing-lg) !important;
-}
-
-.mt-0 {
-  margin-top: 0 !important;
-}
-
-.mt-sm {
-  margin-top: var(--spacing-sm) !important;
-}
-
-.mt-md {
-  margin-top: var(--spacing-md) !important;
-}
-
-.mt-lg {
-  margin-top: var(--spacing-lg) !important;
-}
-
-/* === ANIMATIONS === */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.animate-fadeIn {
-  animation: fadeIn var(--transition-normal) ease-out;
-}
-
-.animate-slideIn {
-  animation: slideIn var(--transition-normal) ease-out;
-}
-
-/* === FOCUS STYLES === */
-*:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* === SCROLLBAR STYLES === */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--color-background);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-dark);
-  border-radius: var(--radius-sm);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-light);
-}
-
-/* === PRINT STYLES === */
-@media print {
-  .sidebar,
-  .app-header,
-  .form-modal,
-  .action-button,
-  .task-actions,
-  .payment-actions,
-  .hours-actions {
-    display: none !important;
-  }
-  
-  .main-content {
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  
-  .content-wrapper {
-    padding: 0 !important;
-  }
-  
-  .summary-card,
-  .task-container,
-  .payment-card,
-  .hours-card {
-    box-shadow: none !important;
-    border: 1px solid var(--color-border) !important;
-    break-inside: avoid;
-  }
-}
-    </style>
 </head>
 <body>
     <!-- Loading Screen -->
-    <div id="loadingScreen" class="loading-overlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <p class="loading-text">Cargando perfil...</p>
+    <div id="loadingScreen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f5f5; display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div style="text-align: center;">
+            <div style="width: 50px; height: 50px; border: 5px solid #d32f2f; border-top: 5px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+            <p>Cargando perfil...</p>
+        </div>
+    </div>
+
+    <!-- Estado de espera o rechazo -->
+    <div id="accessDeniedScreen" style="display: none; align-items: center; justify-content: center; height: 100vh; text-align: center;">
+        <div style="background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <div id="statusIcon" style="font-size: 64px; margin-bottom: 20px;"></div>
+            <h2 id="statusTitle"></h2>
+            <p id="statusMessage" style="color: #666; margin-top: 10px;"></p>
+            <button onclick="logout()" style="margin-top: 20px; padding: 10px 20px; background: #d32f2f; color: white; border: none; border-radius: 5px; cursor: pointer;">Volver al login</button>
         </div>
     </div>
 
     <!-- Main Application -->
-    <div id="mainApp" class="main-app">
-        <div class="app-container">
+    <div id="mainApp" style="display: none;">
+        <div class="container">
             <!-- Sidebar -->
-            <aside class="sidebar">
+            <div class="sidebar">
                 <div class="sidebar-header">
-                    <div class="logo-container">
-                        <img src="IMG/UrbanCoop White.jpeg" alt="Urban Coop" class="logo">
+                    <div class="logo">
+                        <img src="IMG/UrbanCoop White.jpeg" alt="Urban Coop" class="logo-img">
                     </div>
-                    <div class="search-container">
+                    <div class="search-box">
                         <input type="text" class="search-input" placeholder="Buscar...">
-                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <path d="m21 21-4.35-4.35"></path>
-                        </svg>
+                        <span class="menu-item-count" id="myDayCount">0</span>
                     </div>
-                </div>
-                
-                <nav class="sidebar-nav">
-                    <div class="nav-item">
-                        <div class="nav-item-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    
+                    <div class="menu-item">
+                        <span class="menu-item-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
                             </svg>
-                        </div>
-                        <span class="nav-item-text">Importantes</span>
-                        <span class="nav-item-badge">0</span>
+                        </span>
+                        <span class="menu-item-text">Importantes</span>
+                        <span class="menu-item-count">0</span>
                     </div>
                     
-                    <div class="nav-item">
-                        <div class="nav-item-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="menu-item">
+                        <span class="menu-item-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M9 11H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h4m6-6h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4m-6-6V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>
-                        </div>
-                        <span class="nav-item-text">Tareas</span>
-                        <span class="nav-item-badge">0</span>
+                        </span>
+                        <span class="menu-item-text">Tareas</span>
+                        <span class="menu-item-count">0</span>
                     </div>
                     
-                    <div class="nav-item">
-                        <div class="nav-item-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="menu-item">
+                        <span class="menu-item-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                                 <polyline points="9,22 9,12 15,12 15,22"></polyline>
                             </svg>
-                        </div>
-                        <span class="nav-item-text">Casa</span>
-                        <span class="nav-item-badge">3</span>
+                        </span>
+                        <span class="menu-item-text">Casa</span>
+                        <span class="menu-item-count">3</span>
                     </div>
-                </nav>
-            </aside>
+                </div>
+            </div>
 
             <!-- Main Content -->
-            <main class="main-content">
+            <div class="main-content">
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="header-nav">
-                        <button class="nav-button active" data-section="tasks">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 11H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h4m6-6h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4m-6-6V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                            Tareas
-                        </button>
-                        <button class="nav-button" data-section="payments">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14,2 14,8 20,8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                                <polyline points="10,9 9,9 8,9"></polyline>
-                            </svg>
-                            Comprobantes
-                        </button>
-                        <button class="nav-button" data-section="hours">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12,6 12,12 16,14"></polyline>
-                            </svg>
-                            Horas Trabajadas
-                        </button>
-                    </nav>
+                <div class="header">
+                    <div class="header-left">
+                        <nav class="header-nav">
+                            <button class="nav-btn active" onclick="showSection('tasks')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 11H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h4m6-6h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4m-6-6V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                Tareas
+                            </button>
+                            <button class="nav-btn" onclick="showSection('payments')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14,2 14,8 20,8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10,9 9,9 8,9"></polyline>
+                                </svg>
+                                Comprobantes
+                            </button>
+                            <button class="nav-btn" onclick="showSection('hours')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12,6 12,12 16,14"></polyline>
+                                </svg>
+                                Horas Trabajadas
+                            </button>
+                        </nav>
+                    </div>
                     
-                    <div class="profile-section">
-                        <div class="profile-dropdown">
-                            <button class="profile-button">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="header-right">
+                        <div class="profile-menu">
+                            <button class="profile-btn" onclick="toggleProfileMenu()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                                     <circle cx="12" cy="7" r="4"></circle>
                                 </svg>
-                                <span id="userNameDisplay">Usuario de Prueba</span>
-                                <svg class="dropdown-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="6,9 12,15 18,9"></polyline>
-                                </svg>
+                                <span id="userNameDisplay">Usuario</span>
                             </button>
-                            <div class="profile-menu" id="profileDropdown">
-                                <button class="profile-menu-item" onclick="logout()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                        <polyline points="16,17 21,12 16,7"></polyline>
-                                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                                    </svg>
-                                    Cerrar Sesión
-                                </button>
+                            <div class="profile-dropdown" id="profileDropdown">
+                                <a href="#" onclick="logout()">Cerrar Sesión</a>
                             </div>
                         </div>
                     </div>
-                </header>
+                </div>
                 
-                <!-- Content Area -->
-                <div class="content-wrapper">
+                <!-- Content Sections -->
+                <div class="content-area">
                     <!-- Tasks Section -->
-                    <section id="tasks-section" class="content-section active">
+                    <div id="tasks-section" class="section active">
                         <div class="section-header">
-                            <h1 class="section-title">Mis Tareas</h1>
-                            <button class="action-button primary" id="addTaskBtn">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                Agregar Tarea
-                            </button>
+                            <h2 class="section-title">Mis Tareas</h2>
+                            <div class="task-actions">
+                                <button class="add-btn" onclick="addNewTask()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Agregar tarea
+                                </button>
+                            </div>
                         </div>
                         
-                        <div class="task-container" id="taskList">
+                        <div class="task-list" id="taskList">
                             <div class="task-item" data-category="trabajo">
-                                <div class="task-checkbox-container">
-                                    <input type="checkbox" class="task-checkbox" id="task-1">
-                                    <label for="task-1" class="checkbox-label"></label>
-                                </div>
+                                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
                                 <span class="task-text">Completar registro de horas</span>
                                 <div class="task-actions">
-                                    <button class="task-action-btn star-btn" title="Marcar como importante">
+                                    <button class="star-btn" onclick="toggleFavorite(this)" title="Marcar como importante">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
                                         </svg>
                                     </button>
-                                    <button class="task-action-btn delete-btn" title="Eliminar tarea">
+                                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3,6 5,6 21,6"></polyline>
+                                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="task-item" data-category="casa">
+                                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
+                                <span class="task-text">Actualizar datos personales</span>
+                                <div class="task-actions">
+                                    <button class="star-btn favorite" onclick="toggleFavorite(this)" title="Marcar como importante">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+                                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
+                                        </svg>
+                                    </button>
+                                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3,6 5,6 21,6"></polyline>
+                                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="task-item" data-category="casa">
+                                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
+                                <span class="task-text">Programar reunión equipo</span>
+                                <div class="task-actions">
+                                    <button class="star-btn" onclick="toggleFavorite(this)" title="Marcar como importante">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
+                                        </svg>
+                                    </button>
+                                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="3,6 5,6 21,6"></polyline>
                                             <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
@@ -1635,14 +282,14 @@ body {
                                 </div>
                             </div>
                         </div>
-                    </section>
+                    </div>
 
                     <!-- Payments Section -->
-                    <section id="payments-section" class="content-section">
+                    <div id="payments-section" class="section">
                         <div class="section-header">
-                            <h1 class="section-title">Comprobantes de Pago</h1>
-                            <button class="action-button primary" id="uploadPaymentBtn">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <h2 class="section-title">Comprobantes de Pago</h2>
+                            <button class="add-btn" onclick="showUploadForm()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                     <polyline points="7,10 12,15 17,10"></polyline>
                                     <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -1651,90 +298,28 @@ body {
                             </button>
                         </div>
 
-                        <!-- Payment Summary Cards -->
-                        <div class="summary-grid">
-                            <div class="summary-card balance">
-                                <div class="card-header">
-                                    <div class="card-icon">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                                            <line x1="1" y1="10" x2="23" y2="10"></line>
-                                        </svg>
-                                    </div>
-                                    <h3 class="card-title">Pago Actual</h3>
-                                </div>
-                                <div class="card-amount" id="currentBalance">$15.000</div>
-                                <div class="card-status" id="paymentStatus">Al día</div>
-                            </div>
+                        <div id="paymentMessages"></div>
 
-                            <div class="summary-card fee">
-                                <div class="card-header">
-                                    <div class="card-icon">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="12" y1="1" x2="12" y2="23"></line>
-                                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                        </svg>
-                                    </div>
-                                    <h3 class="card-title">Cuota Mensual</h3>
-                                </div>
-                                <div class="card-amount" id="monthlyFee">$22.000</div>
-                                <div class="card-subtitle">Cuota fija mensual</div>
-                            </div>
-
-                            <div class="summary-card progress">
-                                <div class="card-header">
-                                    <div class="card-icon">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-                                        </svg>
-                                    </div>
-                                    <h3 class="card-title">Progreso de Pago</h3>
-                                </div>
-                                <div class="progress-container">
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" id="progressFill" data-progress="68"></div>
-                                    </div>
-                                    <div class="progress-text" id="progressText">68%</div>
-                                </div>
-                                <div class="card-subtitle">Completado este mes</div>
-                            </div>
-                        </div>
-
-                        <div id="paymentMessages" class="messages-container"></div>
-
-                        <!-- Upload Form -->
-                        <div id="upload-form" class="form-modal">
+                        <div id="upload-form" style="display: none;">
                             <div class="form-container">
-                                <div class="form-header">
-                                    <h2>Subir Comprobante de Pago</h2>
-                                    <button class="close-btn" id="closeUploadForm">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                                        </svg>
-                                    </button>
-                                </div>
-                                <form id="uploadPaymentForm" enctype="multipart/form-data">
-                                    <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                <form id="uploadPaymentForm" enctype="multipart/form-data" onsubmit="submitPaymentForm(event)">
+                                    <input type="hidden" name="user_id" id="uploadUserId" value="">
                                     
-                                    <div class="upload-zone" id="uploadArea">
-                                        <div class="upload-icon">
-                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                                <polyline points="7,10 12,15 17,10"></polyline>
-                                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                                            </svg>
-                                        </div>
-                                        <p class="upload-text">Arrastra y suelta tu archivo aquí</p>
-                                        <p class="upload-subtext">o haz clic para seleccionar</p>
-                                        <p class="upload-info">PDF, JPG, PNG - Máximo 5MB</p>
+                                    <div class="upload-area" id="uploadArea">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="7,10 12,15 17,10"></polyline>
+                                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                                        </svg>
+                                        <p>Arrastra y suelta tu archivo aquí o haz clic para seleccionar</p>
+                                        <p style="font-size: 12px; color: #666; margin-top: 5px;">PDF, JPG, PNG - Máximo 5MB</p>
                                         <input type="file" name="payment_file" id="payment_file" accept=".pdf,.jpg,.jpeg,.png" required>
                                     </div>
                                     
-                                    <div class="form-grid">
+                                    <div class="form-row">
                                         <div class="form-group">
-                                            <label class="form-label">Mes de Pago *</label>
-                                            <select name="payment_month" class="form-select" required>
+                                            <label>Mes de Pago *</label>
+                                            <select name="payment_month" id="payment_month" required>
                                                 <option value="">Seleccionar mes</option>
                                                 <option value="01">Enero</option>
                                                 <option value="02">Febrero</option>
@@ -1751,65 +336,39 @@ body {
                                             </select>
                                         </div>
                                         <div class="form-group">
-                                            <label class="form-label">Año *</label>
-                                            <select name="payment_year" class="form-select" required>
+                                            <label>Año *</label>
+                                            <select name="payment_year" id="payment_year" required>
                                                 <option value="">Seleccionar año</option>
                                                 <option value="2024">2024</option>
                                                 <option value="2025">2025</option>
                                             </select>
                                         </div>
                                     </div>
-
-                                    <div class="form-group">
-                                        <label class="form-label">Importe del Pago *</label>
-                                        <div class="amount-input">
-                                            <span class="amount-symbol">$</span>
-                                            <input type="number" name="payment_amount" class="form-input amount" 
-                                                   min="1000" max="1000000" step="1" 
-                                                   placeholder="22000" required>
-                                        </div>
-                                        <small class="form-hint">Ingrese el monto sin puntos ni comas</small>
-                                    </div>
                                     
                                     <div class="form-group">
-                                        <label class="form-label">Descripción (opcional)</label>
-                                        <textarea name="payment_description" class="form-textarea" 
-                                                  rows="3" placeholder="Agregar notas adicionales..."></textarea>
+                                        <label>Descripción (opcional)</label>
+                                        <textarea name="payment_description" id="payment_description" rows="3" placeholder="Agregar notas adicionales..."></textarea>
                                     </div>
                                     
-                                    <div class="form-actions">
-                                        <button type="submit" class="action-button primary">Subir Comprobante</button>
-                                        <button type="button" class="action-button secondary" id="cancelUpload">Cancelar</button>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="submit-btn">Subir Comprobante</button>
+                                        <button type="button" class="submit-btn" onclick="hideUploadForm()" style="background: #666;">Cancelar</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                         
-                        <div class="payments-list" id="paymentsList">
-                            <!-- Ejemplo de comprobante -->
-                            <div class="payment-card">
-                                <div class="payment-info">
-                                    <h3 class="payment-title">Comprobante Septiembre 2024</h3>
-                                    <div class="payment-details">
-                                        <span class="payment-amount">$15.000</span>
-                                        <span class="payment-date">15/09/2024 14:30</span>
-                                        <span class="payment-size">1.2 MB</span>
-                                    </div>
-                                </div>
-                                <div class="payment-actions">
-                                    <span class="payment-status pending">Pendiente</span>
-                                    <button class="action-button secondary small">Ver</button>
-                                </div>
-                            </div>
+                        <div class="file-list" id="paymentsList">
+                            <!-- Se carga dinámicamente con JavaScript -->
                         </div>
-                    </section>
+                    </div>
 
                     <!-- Hours Section -->
-                    <section id="hours-section" class="content-section">
+                    <div id="hours-section" class="section">
                         <div class="section-header">
-                            <h1 class="section-title">Registro de Horas</h1>
-                            <button class="action-button primary" id="addHoursBtn">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <h2 class="section-title">Registro de Horas</h2>
+                            <button class="add-btn" onclick="showHoursForm()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
@@ -1817,61 +376,46 @@ body {
                             </button>
                         </div>
 
+                        <!-- Resumen de horas del mes -->
                         <div class="hours-summary">
-                            <h3 class="summary-title">Resumen del mes actual</h3>
-                            <div class="summary-stats">
-                                <div class="stat">
-                                    <span class="stat-label">Total de horas:</span>
-                                    <span class="stat-value" id="totalHoursMonth">32 horas</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="stat-label">Mes:</span>
-                                    <span class="stat-value" id="currentMonthDisplay">Septiembre 2024</span>
-                                </div>
-                            </div>
+                            <h3>Resumen del mes actual</h3>
+                            <p>Total de horas registradas: <strong id="totalHoursMonth">0 horas</strong></p>
+                            <p>Mes: <span id="currentMonthDisplay"><?php echo date('F Y'); ?></span></p>
                         </div>
 
-                        <div id="hours-form" class="form-modal">
+                        <div id="hours-form" style="display: none;">
                             <div class="form-container">
-                                <div class="form-header">
-                                    <h2>Registrar Horas Trabajadas</h2>
-                                    <button class="close-btn" id="closeHoursForm">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                                        </svg>
-                                    </button>
-                                </div>
+                                <div id="hoursMessages"></div>
                                 
-                                <div id="hoursMessages" class="messages-container"></div>
-                                
-                                <form id="hoursForm">
-                                    <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                <form id="hoursForm" onsubmit="submitHoursForm(event)">
+                                    <input type="hidden" name="user_id" id="hoursUserId" value="">
                                     
-                                    <div class="form-grid">
+                                    <div class="form-row">
                                         <div class="form-group">
-                                            <label class="form-label">Fecha de Trabajo *</label>
-                                            <input type="date" name="work_date" class="form-input" 
-                                                   max="<?php echo date('Y-m-d'); ?>" required>
+                                            <label>Fecha de Trabajo *</label>
+                                            <input type="date" name="work_date" id="work_date" 
+                                                   max="<?php echo date('Y-m-d'); ?>" 
+                                                   required>
                                         </div>
                                         <div class="form-group">
-                                            <label class="form-label">Horas Trabajadas *</label>
-                                            <input type="number" name="hours_worked" class="form-input" 
+                                            <label>Horas Trabajadas *</label>
+                                            <input type="number" name="hours_worked" id="hours_worked" 
                                                    min="0.5" max="24" step="0.5" 
-                                                   placeholder="8.0" required>
+                                                   placeholder="8.0" 
+                                                   required>
                                         </div>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label class="form-label">Descripción del Trabajo *</label>
-                                        <textarea name="description" class="form-textarea" rows="4" 
+                                        <label>Descripción del Trabajo *</label>
+                                        <textarea name="description" id="description" rows="4" 
                                                   placeholder="Describe las actividades realizadas durante el día..." 
                                                   required></textarea>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label class="form-label">Tipo de Trabajo *</label>
-                                        <select name="work_type" class="form-select" required>
+                                        <label>Tipo de Trabajo *</label>
+                                        <select name="work_type" id="work_type" required>
                                             <option value="">Seleccionar tipo</option>
                                             <option value="desarrollo">Desarrollo</option>
                                             <option value="reunion">Reuniones</option>
@@ -1884,34 +428,725 @@ body {
                                         </select>
                                     </div>
                                     
-                                    <div class="form-actions">
-                                        <button type="submit" class="action-button primary">Registrar Horas</button>
-                                        <button type="button" class="action-button secondary" id="cancelHours">Cancelar</button>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="submit-btn">Registrar Horas</button>
+                                        <button type="button" class="submit-btn" onclick="hideHoursForm()" style="background: #666;">Cancelar</button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                         
                         <div class="hours-list" id="hoursList">
-                            <!-- Ejemplo de registro -->
-                            <div class="hours-card">
-                                <div class="hours-info">
-                                    <h3 class="hours-title">14/09/2024 - 8 horas</h3>
-                                    <div class="hours-type">Desarrollo</div>
-                                    <p class="hours-description">Desarrollo de nuevas funcionalidades para el sistema de gestión cooperativa.</p>
-                                    <small class="hours-date">Registrado el 14/09/2024 18:30</small>
-                                </div>
-                                <div class="hours-actions">
-                                    <button class="action-button danger small">Eliminar</button>
-                                </div>
-                            </div>
+                            <!-- Se carga dinámicamente con JavaScript -->
                         </div>
-                    </section>
+                    </div>
                 </div>
-            </main>
+            </div>
         </div>
+
+        <!-- Admin Button (only visible for admins) -->
+        <button class="admin-btn" id="adminBtn" onclick="goToAdmin()" title="Panel de Administración" style="display: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"></path>
+            </svg>
+        </button>
+
+        <!-- Chat Button -->
+        <button class="chat-btn" onclick="openChat()" title="Abrir chat">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+        </button>
     </div>
 
-    <script src="JSS/perfil.js"></script>
+    <style>
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .admin-btn {
+        position: fixed;
+        bottom: 100px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .admin-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+    }
+
+    .chat-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chat-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+    }
+
+    .alert-success {
+        background-color: #e8f5e8;
+        color: #2e7d32;
+        border-left: 4px solid #4caf50;
+    }
+
+    .alert-error {
+        background-color: #ffebee;
+        color: #c62828;
+        border-left: 4px solid #e53935;
+    }
+    </style>
+
+    <script>
+    // Variables globales
+    let currentUser = null;
+    let isUserDataLoaded = false;
+const API_BASE = '../APIS/API_cooperativa.php';
+
+    // Función principal de inicialización
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Iniciando carga del perfil...');
+        
+        // Verificar autenticación
+        const userData = sessionStorage.getItem('user_data');
+        
+        if (!userData) {
+            console.log('No hay datos de usuario en sessionStorage');
+            redirectToLogin('No hay sesión activa');
+            return;
+        }
+
+        try {
+            currentUser = JSON.parse(userData);
+            console.log('Usuario cargado:', currentUser);
+            
+            // Validar estructura de datos del usuario
+            if (!currentUser.id || !currentUser.email || !currentUser.estado) {
+                throw new Error('Datos de usuario incompletos');
+            }
+
+            // Verificar estado del usuario
+            if (currentUser.estado == 1) {
+                showAccessDenied('waiting', 'Cuenta en Espera', 'Esperando la aprobación manual de un administrador');
+                return;
+            } else if (currentUser.estado == 3) {
+                showAccessDenied('rejected', 'Cuenta Rechazada', 'Usuario rechazado. Contacte con el administrador.');
+                return;
+            } else if (currentUser.estado != 2) {
+                showAccessDenied('unknown', 'Estado Desconocido', 'Estado de usuario desconocido');
+                return;
+            }
+
+            // Usuario aprobado - inicializar aplicación
+            initializeApp();
+            
+        } catch (error) {
+            console.error('Error al procesar datos de usuario:', error);
+            sessionStorage.clear();
+            redirectToLogin('Error en los datos de sesión');
+        }
+    });
+
+    // Funciones de inicialización
+    function showAccessDenied(type, title, message) {
+        hideLoadingScreen();
+        
+        const screen = document.getElementById('accessDeniedScreen');
+        const icon = document.getElementById('statusIcon');
+        const titleEl = document.getElementById('statusTitle');
+        const messageEl = document.getElementById('statusMessage');
+        
+        if (type === 'waiting') {
+            icon.innerHTML = '⏳';
+        } else if (type === 'rejected') {
+            icon.innerHTML = '❌';
+        } else {
+            icon.innerHTML = '❓';
+        }
+        
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        screen.style.display = 'flex';
+    }
+
+    function initializeApp() {
+        console.log('Inicializando aplicación para usuario:', currentUser.name);
+        
+        // Actualizar interfaz con datos del usuario
+        updateUserInterface();
+        
+        // Cargar datos del usuario
+        loadUserData();
+        
+        // Mostrar aplicación principal
+        hideLoadingScreen();
+        document.getElementById('mainApp').style.display = 'block';
+        
+        // Inicializar componentes
+        updateTaskCount();
+        setupFormHandlers();
+        
+        console.log('Aplicación inicializada correctamente');
+        isUserDataLoaded = true;
+    }
+
+    function updateUserInterface() {
+        const userNameDisplay = document.getElementById('userNameDisplay');
+        if (userNameDisplay) {
+            userNameDisplay.textContent = currentUser.name + ' ' + currentUser.surname;
+        }
+        
+        // Mostrar botón de admin si es administrador
+        if (currentUser.is_admin == 1) {
+            const adminBtn = document.getElementById('adminBtn');
+            if (adminBtn) {
+                adminBtn.style.display = 'flex';
+            }
+        }
+        
+        // Actualizar campos ocultos con el ID del usuario
+        const uploadUserId = document.getElementById('uploadUserId');
+        const hoursUserId = document.getElementById('hoursUserId');
+        
+        if (uploadUserId) uploadUserId.value = currentUser.id;
+        if (hoursUserId) hoursUserId.value = currentUser.id;
+    }
+
+    // Funciones API
+    function loadUserData() {
+        console.log('Cargando datos del usuario...');
+        
+        fetch(API_BASE + '?action=get_user_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Datos cargados exitosamente');
+                updatePaymentsList(data.payments);
+                updateHoursList(data.hours);
+                updateHoursMonth(data.total_hours_month, data.current_month);
+            } else {
+                console.error('Error al cargar datos:', data.message);
+                showMessage('paymentMessages', 'Error al cargar datos: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error de conexión:', error);
+            showMessage('paymentMessages', 'Error de conexión', 'error');
+        });
+    }
+
+    function submitPaymentForm(event) {
+        event.preventDefault();
+        
+        const formData = new FormData();
+        const form = document.getElementById('uploadPaymentForm');
+        
+        // Agregar todos los campos del formulario
+        formData.append('user_id', currentUser.id);
+        formData.append('payment_month', form.payment_month.value);
+        formData.append('payment_year', form.payment_year.value);
+        formData.append('payment_description', form.payment_description.value);
+        formData.append('payment_file', form.payment_file.files[0]);
+        
+        fetch(API_BASE + '?action=upload_payment', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('paymentMessages', data.message, 'success');
+                hideUploadForm();
+                form.reset();
+                loadUserData(); // Recargar datos
+            } else {
+                showMessage('paymentMessages', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('paymentMessages', 'Error al subir el comprobante', 'error');
+        });
+    }
+
+    function submitHoursForm(event) {
+        event.preventDefault();
+        
+        const form = document.getElementById('hoursForm');
+        
+        const hoursData = {
+            user_id: currentUser.id,
+            work_date: form.work_date.value,
+            hours_worked: parseFloat(form.hours_worked.value),
+            description: form.description.value,
+            work_type: form.work_type.value
+        };
+        
+        fetch(API_BASE + '?action=register_hours', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(hoursData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('hoursMessages', data.message, 'success');
+                hideHoursForm();
+                form.reset();
+                loadUserData(); // Recargar datos
+            } else {
+                showMessage('hoursMessages', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('hoursMessages', 'Error al registrar las horas', 'error');
+        });
+    }
+
+    function deletePayment(paymentId) {
+        if (!confirm('¿Estás seguro de que quieres eliminar este comprobante?')) {
+            return;
+        }
+        
+        fetch(API_BASE + '?action=delete_payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                payment_id: paymentId,
+                user_id: currentUser.id
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('paymentMessages', data.message, 'success');
+                loadUserData(); // Recargar datos
+            } else {
+                showMessage('paymentMessages', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('paymentMessages', 'Error al eliminar el comprobante', 'error');
+        });
+    }
+
+    function deleteHours(hoursId) {
+        if (!confirm('¿Estás seguro de que quieres eliminar este registro?')) {
+            return;
+        }
+        
+        fetch(API_BASE + '?action=delete_hours', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                hours_id: hoursId,
+                user_id: currentUser.id
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('hoursMessages', data.message, 'success');
+                loadUserData(); // Recargar datos
+            } else {
+                showMessage('hoursMessages', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('hoursMessages', 'Error al eliminar el registro', 'error');
+        });
+    }
+
+    // Funciones de UI
+    function updatePaymentsList(payments) {
+        const paymentsList = document.getElementById('paymentsList');
+        
+        if (!payments || payments.length === 0) {
+            paymentsList.innerHTML = `
+                <div class="empty-state">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14,2 14,8 20,8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10,9 9,9 8,9"></polyline>
+                    </svg>
+                    <h3>No hay comprobantes de pago</h3>
+                    <p>Sube tu primer comprobante de pago para comenzar.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let paymentsHTML = '';
+        payments.forEach(payment => {
+            const fileIcon = payment.file_type.includes('pdf') ? 
+                `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d32f2f" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14,2 14,8 20,8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10,9 9,9 8,9"></polyline>
+                </svg>` : 
+                `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21,15 16,10 5,21"></polyline>
+                </svg>`;
+            
+            paymentsHTML += `
+                <div class="file-item">
+                    <div class="file-info-wrapper">
+                        <div class="file-icon">${fileIcon}</div>
+                        <div class="file-info">
+                            <h3>Comprobante ${payment.month_name} ${payment.year}</h3>
+                            <p>Subido el ${payment.created_at} • ${payment.file_size}</p>
+                            ${payment.description ? `<p style="font-style: italic; margin-top: 5px;">${payment.description}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <span class="file-status status-${payment.status}">${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
+                        <a href="${API_BASE}?action=download_payment&id=${payment.id}&user_id=${currentUser.id}" class="action-btn" title="Descargar">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7,10 12,15 17,10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Descargar
+                        </a>
+                        <button onclick="deletePayment(${payment.id})" class="delete-payment-btn">Eliminar</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        paymentsList.innerHTML = paymentsHTML;
+    }
+
+    function updateHoursList(hours) {
+        const hoursList = document.getElementById('hoursList');
+        
+        if (!hours || hours.length === 0) {
+            hoursList.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 20px;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12,6 12,12 16,14"></polyline>
+                    </svg>
+                    <h3>No hay registros de horas</h3>
+                    <p>Comienza registrando tus primeras horas de trabajo.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let hoursHTML = '';
+        hours.forEach(record => {
+            hoursHTML += `
+                <div class="hours-item">
+                    <div class="hours-actions">
+                        <button onclick="deleteHours(${record.id})" class="delete-hours-btn">Eliminar</button>
+                    </div>
+                    <div class="hours-info">
+                        <h3>${record.work_date_formatted} - ${record.hours_worked} horas</h3>
+                        <p><strong>Tipo:</strong> ${record.work_type}</p>
+                        <p>${record.description}</p>
+                        <small style="color: #666;">Registrado el ${record.created_at}</small>
+                    </div>
+                </div>
+            `;
+        });
+        
+        hoursList.innerHTML = hoursHTML;
+    }
+
+    function updateHoursMonth(totalHours, currentMonth) {
+        const totalHoursMonth = document.getElementById('totalHoursMonth');
+        const currentMonthDisplay = document.getElementById('currentMonthDisplay');
+        
+        if (totalHoursMonth) {
+            totalHoursMonth.textContent = `${totalHours} horas`;
+        }
+        
+        if (currentMonthDisplay) {
+            currentMonthDisplay.textContent = currentMonth;
+        }
+    }
+
+    function showMessage(containerId, message, type) {
+        const container = document.getElementById(containerId);
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+        
+        container.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+        
+        // Auto-ocultar después de 5 segundos
+        setTimeout(() => {
+            container.innerHTML = '';
+        }, 5000);
+    }
+
+    function hideLoadingScreen() {
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+        }
+    }
+
+    function redirectToLogin(message) {
+        console.log('Redirigiendo al login:', message);
+        hideLoadingScreen();
+        
+        if (message) {
+            alert(message);
+        }
+        
+        sessionStorage.clear();
+        window.location.href = 'loginLP.php';
+    }
+
+    // Funciones de navegación
+    function showSection(sectionName) {
+        document.querySelectorAll('.section').forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        document.getElementById(sectionName + '-section').classList.add('active');
+        event.target.closest('.nav-btn').classList.add('active');
+    }
+
+    function toggleProfileMenu() {
+        const dropdown = document.getElementById('profileDropdown');
+        dropdown.classList.toggle('show');
+    }
+
+    // Cerrar dropdown cuando se hace clic fuera
+    document.addEventListener('click', function(event) {
+        const profileMenu = document.querySelector('.profile-menu');
+        if (!profileMenu.contains(event.target)) {
+            const dropdown = document.getElementById('profileDropdown');
+            if (dropdown) {
+                dropdown.classList.remove('show');
+            }
+        }
+    });
+
+    // Funciones de tareas
+    function toggleTask(checkbox) {
+        const taskItem = checkbox.closest('.task-item');
+        if (checkbox.checked) {
+            taskItem.classList.add('completed');
+        } else {
+            taskItem.classList.remove('completed');
+        }
+        updateTaskCount();
+    }
+
+    function addNewTask() {
+        const taskText = prompt('Ingresa el texto de la nueva tarea:');
+        if (taskText && taskText.trim()) {
+            const category = prompt('Selecciona la categoría (trabajo/casa):') || 'trabajo';
+            
+            const taskList = document.getElementById('taskList');
+            const newTask = document.createElement('div');
+            newTask.className = 'task-item';
+            newTask.setAttribute('data-category', category);
+            newTask.innerHTML = `
+                <input type="checkbox" class="task-checkbox" onchange="toggleTask(this)">
+                <span class="task-text">${taskText.trim()}</span>
+                <div class="task-actions">
+                    <button class="star-btn" onclick="toggleFavorite(this)" title="Marcar como importante">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
+                        </svg>
+                    </button>
+                    <button class="delete-btn" onclick="deleteTask(this)" title="Eliminar tarea">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3,6 5,6 21,6"></polyline>
+                            <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            taskList.appendChild(newTask);
+            updateTaskCount();
+        }
+    }
+
+    function toggleFavorite(button) {
+        const taskItem = button.closest('.task-item');
+        const svg = button.querySelector('svg');
+        
+        if (button.classList.contains('favorite')) {
+            button.classList.remove('favorite');
+            svg.setAttribute('fill', 'none');
+        } else {
+            button.classList.add('favorite');
+            svg.setAttribute('fill', 'currentColor');
+        }
+        updateTaskCount();
+    }
+
+    function deleteTask(button) {
+        if (confirm('¿Estás seguro de que quieres eliminar esta tarea?')) {
+            const taskItem = button.closest('.task-item');
+            taskItem.remove();
+            updateTaskCount();
+        }
+    }
+
+    function updateTaskCount() {
+        const totalTasks = document.querySelectorAll('.task-item').length;
+        const completedTasks = document.querySelectorAll('.task-item.completed').length;
+        const remainingTasks = totalTasks - completedTasks;
+        const favoriteTasks = document.querySelectorAll('.star-btn.favorite').length;
+        const casaTasks = document.querySelectorAll('.task-item[data-category="casa"]').length;
+        
+        const myDayCount = document.getElementById('myDayCount');
+        if (myDayCount) myDayCount.textContent = remainingTasks;
+        
+        const menuItems = document.querySelectorAll('.menu-item .menu-item-count');
+        if (menuItems[1]) menuItems[1].textContent = favoriteTasks;
+        if (menuItems[2]) menuItems[2].textContent = totalTasks;
+        if (menuItems[3]) menuItems[3].textContent = casaTasks;
+    }
+
+    // Funciones de formularios
+    function showUploadForm() {
+        document.getElementById('upload-form').style.display = 'block';
+    }
+
+    function hideUploadForm() {
+        document.getElementById('upload-form').style.display = 'none';
+    }
+
+    function showHoursForm() {
+        document.getElementById('hours-form').style.display = 'block';
+        document.getElementById('hours-form').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function hideHoursForm() {
+        document.getElementById('hours-form').style.display = 'none';
+        document.getElementById('hoursForm').reset();
+    }
+    
+    function setupFormHandlers() {
+        // Configurar drag & drop para archivos
+        const uploadArea = document.getElementById('uploadArea');
+        if (uploadArea) {
+            uploadArea.addEventListener('click', function() {
+                this.querySelector('input[type="file"]').click();
+            });
+
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.style.borderColor = '#d32f2f';
+                this.style.backgroundColor = '#fafafa';
+            });
+
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.style.borderColor = '#ddd';
+                this.style.backgroundColor = 'white';
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.borderColor = '#ddd';
+                this.style.backgroundColor = 'white';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.querySelector('input[type="file"]').files = files;
+                    this.querySelector('p').textContent = files[0].name;
+                }
+            });
+        }
+    }
+
+    // Funciones de utilidad
+    function logout() {
+        if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
+            sessionStorage.clear();
+            alert('Sesión cerrada exitosamente');
+            window.location.href = 'loginLP.php';
+        }
+    }
+
+    function goToAdmin() {
+        if (currentUser && currentUser.is_admin == 1) {
+            window.location.href = 'admin.php';
+        } else {
+            alert('No tienes permisos para acceder al panel de administración');
+        }
+    }
+
+    function openChat() {
+        alert('Función de chat en desarrollo');
+    }
+
+    // Inicializar componentes después de cargar la app
+    setTimeout(() => {
+        if (isUserDataLoaded) {
+            setupFormHandlers();
+        }
+    }, 1000);
+    </script>
 </body>
 </html>

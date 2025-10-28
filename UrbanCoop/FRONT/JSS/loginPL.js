@@ -115,7 +115,7 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
             setTimeout(() => {
                 if (data.user.is_admin == 1) {
                     console.log('Redirigiendo a admin.php');
-                    window.location.href = 'BACKOFFICE/admin.php';
+                    window.location.href = '../FRONT/BACKOFFICE/admin.php';
                 } else {
                     console.log('Redirigiendo a perfil.php');
                     window.location.href = 'perfil.php';

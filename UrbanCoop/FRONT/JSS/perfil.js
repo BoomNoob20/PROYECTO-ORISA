@@ -1,5 +1,5 @@
-// ===== URBAN COOP - PERFIL JAVASCRIPT =====
-// Sistema de gestión cooperativa - Versión sin JWT
+// ===== URBAN COOP - PERFIL JAVASCRIPT MEJORADO =====
+// Sistema de gestión cooperativa con pago inicial y dashboard
 
 'use strict';
 
@@ -9,16 +9,28 @@ const PerfilApp = {
     currentUser: {
         id: 1,
         name: 'Usuario de Prueba',
-        is_admin: false
+        is_admin: false,
+        hasInitialPayment: false, // Nuevo campo
+        hasUnit: false,
+        monthlyFee: 22000,
+        totalPaid: 15000,
+        approvedPaid: 10000,
+        requiredHours: 20,
+        totalHoursMonth: 12,
+        meetingsAttended: 1,
+        requiredMeetings: 3
     },
     
     // Estado de la aplicación
     state: {
         isUserDataLoaded: false,
-        activeSection: 'tasks',
+        activeSection: 'dashboard',
         formsVisible: {
             upload: false,
-            balance: false,
+            hours: false
+        },
+        expandedMenus: {
+            payments: false,
             hours: false
         }
     },
@@ -35,7 +47,12 @@ const PerfilApp = {
             { id: 1, month: '09', year: '2024', amount: 15000, status: 'pending', date: '2024-09-15' }
         ],
         hours: [
-            { id: 1, date: '2024-09-14', hours: 8, type: 'desarrollo', description: 'Desarrollo de nuevas funcionalidades para el sistema de gestión cooperativa.' }
+            { id: 1, date: '2024-09-14', hours: 8, type: 'desarrollo', description: 'Desarrollo de nuevas funcionalidades.' }
+        ],
+        upcomingMeetings: [
+            { id: 1, date: '2025-10-15', title: 'Reunión Mensual', required: true, attended: false },
+            { id: 2, date: '2025-10-22', title: 'Asamblea General', required: true, attended: false },
+            { id: 3, date: '2025-10-28', title: 'Reunión de Comité', required: true, attended: false }
         ]
     }
 };
@@ -62,8 +79,13 @@ function cacheElements() {
         loadingScreen: document.getElementById('loadingScreen'),
         mainApp: document.getElementById('mainApp'),
         
+        // Modal de pago inicial
+        initialPaymentModal: document.getElementById('initialPaymentModal'),
+        
         // Navegación
         navButtons: document.querySelectorAll('.nav-button'),
+        navToggles: document.querySelectorAll('.nav-toggle'),
+        navSubmenus: document.querySelectorAll('.nav-submenu'),
         profileButton: document.querySelector('.profile-button'),
         profileDropdown: document.querySelector('.profile-dropdown'),
         profileMenu: document.getElementById('profileDropdown'),
@@ -71,15 +93,27 @@ function cacheElements() {
         // Secciones de contenido
         sections: document.querySelectorAll('.content-section'),
         
-        // Elementos de tareas
-        taskList: document.getElementById('taskList'),
-        addTaskBtn: document.getElementById('addTaskBtn'),
+        // Dashboard
+        noAccessWarning: document.getElementById('noAccessWarning'),
+        monthlyFee: document.getElementById('monthlyFee'),
+        totalPaid: document.getElementById('totalPaid'),
+        approvedAmount: document.getElementById('approvedAmount'),
+        pendingAmount: document.getElementById('pendingAmount'),
+        remainingAmount: document.getElementById('remainingAmount'),
+        financialProgress: document.getElementById('financialProgress'),
+        registeredHours: document.getElementById('registeredHours'),
+        requiredHours: document.getElementById('requiredHours'),
+        missingHours: document.getElementById('missingHours'),
+        hoursProgress: document.getElementById('hoursProgress'),
+        meetingsAttended: document.getElementById('meetingsAttended'),
+        meetingsProgress: document.getElementById('meetingsProgress'),
+        upcomingMeetings: document.getElementById('upcomingMeetings'),
+        unitInfo: document.getElementById('unitInfo'),
         
         // Elementos de pagos
         uploadPaymentBtn: document.getElementById('uploadPaymentBtn'),
         uploadForm: document.getElementById('upload-form'),
         uploadPaymentForm: document.getElementById('uploadPaymentForm'),
-        closeUploadForm: document.getElementById('closeUploadForm'),
         cancelUpload: document.getElementById('cancelUpload'),
         uploadArea: document.getElementById('uploadArea'),
         paymentFile: document.getElementById('payment_file'),
@@ -90,30 +124,42 @@ function cacheElements() {
         addHoursBtn: document.getElementById('addHoursBtn'),
         hoursForm: document.getElementById('hours-form'),
         hoursFormElement: document.getElementById('hoursForm'),
-        closeHoursForm: document.getElementById('closeHoursForm'),
         cancelHours: document.getElementById('cancelHours'),
         hoursList: document.getElementById('hoursList'),
         hoursMessages: document.getElementById('hoursMessages'),
         
-        // Elementos de resumen
-        currentBalance: document.getElementById('currentBalance'),
-        monthlyFee: document.getElementById('monthlyFee'),
-        progressFill: document.getElementById('progressFill'),
-        progressText: document.getElementById('progressText'),
-        paymentStatus: document.getElementById('paymentStatus'),
-        totalHoursMonth: document.getElementById('totalHoursMonth'),
-        currentMonthDisplay: document.getElementById('currentMonthDisplay'),
+        // Elementos de reuniones
+        meetingsList: document.getElementById('meetingsList'),
         
-        // Contadores de navegación
-        navItemBadges: document.querySelectorAll('.nav-item-badge')
+        // Elementos de tareas
+        taskList: document.getElementById('taskList'),
+        addTaskBtn: document.getElementById('addTaskBtn')
     };
 }
 
 function setupEventListeners() {
     // Navegación principal
     PerfilApp.elements.navButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const section = btn.getAttribute('data-section');
+        if (!btn.classList.contains('nav-toggle')) {
+            btn.addEventListener('click', () => {
+                const section = btn.getAttribute('data-section');
+                showSection(section);
+            });
+        }
+    });
+    
+    // Navegación con submenús
+    PerfilApp.elements.navToggles.forEach(toggle => {
+        toggle.addEventListener('click', () => {
+            const menuKey = toggle.getAttribute('data-menu');
+            toggleSubmenu(menuKey);
+        });
+    });
+    
+    // Subítems de navegación
+    document.querySelectorAll('.nav-subitem').forEach(item => {
+        item.addEventListener('click', () => {
+            const section = item.getAttribute('data-section');
             showSection(section);
         });
     });
@@ -136,11 +182,23 @@ function setupEventListeners() {
     }
     
     if (PerfilApp.elements.uploadPaymentBtn) {
-        PerfilApp.elements.uploadPaymentBtn.addEventListener('click', showUploadForm);
+        PerfilApp.elements.uploadPaymentBtn.addEventListener('click', () => {
+            if (!PerfilApp.currentUser.hasInitialPayment) {
+                showMessage('paymentMessages', 'Debes completar el pago inicial antes de subir comprobantes', 'error');
+                return;
+            }
+            showUploadForm();
+        });
     }
     
     if (PerfilApp.elements.addHoursBtn) {
-        PerfilApp.elements.addHoursBtn.addEventListener('click', showHoursForm);
+        PerfilApp.elements.addHoursBtn.addEventListener('click', () => {
+            if (!PerfilApp.currentUser.hasInitialPayment) {
+                showMessage('hoursMessages', 'Debes completar el pago inicial antes de registrar horas', 'error');
+                return;
+            }
+            showHoursForm();
+        });
     }
     
     // Formularios
@@ -159,10 +217,6 @@ function setupFormEventListeners() {
         PerfilApp.elements.uploadPaymentForm.addEventListener('submit', submitPaymentForm);
     }
     
-    if (PerfilApp.elements.closeUploadForm) {
-        PerfilApp.elements.closeUploadForm.addEventListener('click', hideUploadForm);
-    }
-    
     if (PerfilApp.elements.cancelUpload) {
         PerfilApp.elements.cancelUpload.addEventListener('click', hideUploadForm);
     }
@@ -170,10 +224,6 @@ function setupFormEventListeners() {
     // Formulario de horas
     if (PerfilApp.elements.hoursFormElement) {
         PerfilApp.elements.hoursFormElement.addEventListener('submit', submitHoursForm);
-    }
-    
-    if (PerfilApp.elements.closeHoursForm) {
-        PerfilApp.elements.closeHoursForm.addEventListener('click', hideHoursForm);
     }
     
     if (PerfilApp.elements.cancelHours) {
@@ -228,24 +278,127 @@ function initializeApp() {
     // Mostrar aplicación principal
     PerfilApp.elements.mainApp.style.display = 'block';
     
+    // Verificar si tiene pago inicial
+    checkInitialPayment();
+    
     // Inicializar datos
     initializeData();
     
-    // Configurar fecha actual
-    setCurrentDate();
+    // Actualizar dashboard
+    updateDashboard();
     
     // Marcar como cargado
     PerfilApp.state.isUserDataLoaded = true;
     
-    // Mostrar mensaje de bienvenida
-    showMessage('paymentMessages', 'Sistema en modo de prueba - Los datos mostrados son de ejemplo', 'success');
-    
     console.log('Aplicación inicializada correctamente');
+}
+
+// === FUNCIONES DE PAGO INICIAL ===
+
+function checkInitialPayment() {
+    // Verificar si el usuario tiene pago inicial
+    // En producción, esto vendría de la base de datos
+    const hasInitialPayment = localStorage.getItem('hasInitialPayment') === 'true';
+    
+    PerfilApp.currentUser.hasInitialPayment = hasInitialPayment;
+    
+    if (!hasInitialPayment) {
+        showInitialPaymentModal();
+        disableAllActions();
+    } else {
+        enableAllActions();
+    }
+}
+
+function showInitialPaymentModal() {
+    if (PerfilApp.elements.initialPaymentModal) {
+        PerfilApp.elements.initialPaymentModal.style.display = 'flex';
+    }
+    
+    if (PerfilApp.elements.noAccessWarning) {
+        PerfilApp.elements.noAccessWarning.style.display = 'flex';
+    }
+}
+
+function handleInitialPayment() {
+    // Cerrar modal
+    if (PerfilApp.elements.initialPaymentModal) {
+        PerfilApp.elements.initialPaymentModal.style.display = 'none';
+    }
+    
+    // Mostrar formulario de pago
+    showSection('payments');
+    showUploadForm();
+    
+    // Mensaje especial para pago inicial
+    showMessage('paymentMessages', 'Por favor, sube el comprobante de tu pago inicial de $50,000. Una vez aprobado, tendrás acceso completo al sistema.', 'info');
+}
+
+function disableAllActions() {
+    // Deshabilitar botones
+    const actionButtons = document.querySelectorAll('.btn-primary');
+    actionButtons.forEach(btn => {
+        if (btn.id !== 'uploadPaymentBtn') {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        }
+    });
+    
+    // Deshabilitar navegación excepto dashboard y pagos
+    PerfilApp.elements.navButtons.forEach(btn => {
+        const section = btn.getAttribute('data-section');
+        if (section && section !== 'dashboard' && section !== 'payments') {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+        }
+    });
+}
+
+function enableAllActions() {
+    // Habilitar botones
+    const actionButtons = document.querySelectorAll('.btn-primary');
+    actionButtons.forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    });
+    
+    // Habilitar navegación
+    PerfilApp.elements.navButtons.forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    });
+    
+    // Ocultar advertencia
+    if (PerfilApp.elements.noAccessWarning) {
+        PerfilApp.elements.noAccessWarning.style.display = 'none';
+    }
+}
+
+// Simular aprobación de pago inicial (para pruebas)
+function approveInitialPayment() {
+    localStorage.setItem('hasInitialPayment', 'true');
+    PerfilApp.currentUser.hasInitialPayment = true;
+    PerfilApp.currentUser.hasUnit = true;
+    
+    enableAllActions();
+    updateDashboard();
+    
+    showMessage('paymentMessages', '¡Pago inicial aprobado! Ya puedes acceder a todas las funcionalidades del sistema.', 'success');
 }
 
 // === FUNCIONES DE NAVEGACIÓN ===
 
 function showSection(sectionName) {
+    // Verificar acceso si no tiene pago inicial
+    if (!PerfilApp.currentUser.hasInitialPayment) {
+        if (sectionName !== 'dashboard' && sectionName !== 'payments') {
+            showMessage('paymentMessages', 'Debes completar el pago inicial para acceder a esta sección', 'error');
+            return;
+        }
+    }
+    
     // Ocultar todas las secciones
     PerfilApp.elements.sections.forEach(section => {
         section.classList.remove('active');
@@ -256,11 +409,14 @@ function showSection(sectionName) {
         btn.classList.remove('active');
     });
     
+    document.querySelectorAll('.nav-subitem').forEach(item => {
+        item.classList.remove('active');
+    });
+    
     // Mostrar la sección seleccionada
     const targetSection = document.getElementById(`${sectionName}-section`);
     if (targetSection) {
         targetSection.classList.add('active');
-        targetSection.classList.add('animate-fadeIn');
     }
     
     // Activar el botón correspondiente
@@ -274,6 +430,25 @@ function showSection(sectionName) {
     
     // Ocultar formularios si están abiertos
     hideAllForms();
+}
+
+function toggleSubmenu(menuKey) {
+    const submenu = document.getElementById(`${menuKey}-submenu`);
+    const toggle = document.querySelector(`[data-menu="${menuKey}"]`);
+    
+    if (!submenu || !toggle) return;
+    
+    const isExpanded = PerfilApp.state.expandedMenus[menuKey];
+    
+    if (isExpanded) {
+        submenu.style.display = 'none';
+        toggle.classList.remove('expanded');
+    } else {
+        submenu.style.display = 'flex';
+        toggle.classList.add('expanded');
+    }
+    
+    PerfilApp.state.expandedMenus[menuKey] = !isExpanded;
 }
 
 function toggleProfileMenu() {
@@ -296,9 +471,158 @@ function closeProfileMenu() {
     dropdown.classList.remove('active');
 }
 
+// === FUNCIONES DE DASHBOARD ===
+
+function updateDashboard() {
+    updateFinancialInfo();
+    updateHoursInfo();
+    updateMeetingsInfo();
+    updateUnitInfo();
+}
+
+function updateFinancialInfo() {
+    const { monthlyFee, totalPaid, approvedPaid } = PerfilApp.currentUser;
+    const pending = totalPaid - approvedPaid;
+    const remaining = monthlyFee - approvedPaid;
+    const progress = Math.min((approvedPaid / monthlyFee) * 100, 100);
+    
+    if (PerfilApp.elements.monthlyFee) {
+        PerfilApp.elements.monthlyFee.textContent = `$${monthlyFee.toLocaleString()}`;
+    }
+    
+    if (PerfilApp.elements.totalPaid) {
+        PerfilApp.elements.totalPaid.textContent = `$${totalPaid.toLocaleString()}`;
+    }
+    
+    if (PerfilApp.elements.approvedAmount) {
+        PerfilApp.elements.approvedAmount.textContent = `$${approvedPaid.toLocaleString()}`;
+    }
+    
+    if (PerfilApp.elements.pendingAmount) {
+        PerfilApp.elements.pendingAmount.textContent = `$${pending.toLocaleString()}`;
+    }
+    
+    if (PerfilApp.elements.remainingAmount) {
+        PerfilApp.elements.remainingAmount.textContent = `$${remaining.toLocaleString()}`;
+    }
+    
+    if (PerfilApp.elements.financialProgress) {
+        PerfilApp.elements.financialProgress.style.width = `${progress}%`;
+    }
+}
+
+function updateHoursInfo() {
+    const { totalHoursMonth, requiredHours } = PerfilApp.currentUser;
+    const missing = requiredHours - totalHoursMonth;
+    const progress = Math.min((totalHoursMonth / requiredHours) * 100, 100);
+    
+    if (PerfilApp.elements.registeredHours) {
+        PerfilApp.elements.registeredHours.textContent = `${totalHoursMonth} hrs`;
+    }
+    
+    if (PerfilApp.elements.requiredHours) {
+        PerfilApp.elements.requiredHours.textContent = `${requiredHours} hrs`;
+    }
+    
+    if (PerfilApp.elements.missingHours) {
+        PerfilApp.elements.missingHours.textContent = `${missing} hrs`;
+    }
+    
+    if (PerfilApp.elements.hoursProgress) {
+        PerfilApp.elements.hoursProgress.style.width = `${progress}%`;
+    }
+}
+
+function updateMeetingsInfo() {
+    const { meetingsAttended, requiredMeetings } = PerfilApp.currentUser;
+    const progress = Math.min((meetingsAttended / requiredMeetings) * 100, 100);
+    
+    if (PerfilApp.elements.meetingsAttended) {
+        PerfilApp.elements.meetingsAttended.textContent = `${meetingsAttended} / ${requiredMeetings}`;
+    }
+    
+    if (PerfilApp.elements.meetingsProgress) {
+        PerfilApp.elements.meetingsProgress.style.width = `${progress}%`;
+    }
+    
+    // Renderizar próximas reuniones
+    renderUpcomingMeetings();
+}
+
+function renderUpcomingMeetings() {
+    if (!PerfilApp.elements.upcomingMeetings) return;
+    
+    const meetings = PerfilApp.mockData.upcomingMeetings;
+    
+    let html = '<h4>Próximas Reuniones</h4>';
+    
+    meetings.forEach(meeting => {
+        const date = new Date(meeting.date);
+        const formattedDate = date.toLocaleDateString('es-ES', { 
+            day: '2-digit', 
+            month: 'long', 
+            year: 'numeric' 
+        });
+        
+        html += `
+            <div class="meeting-item">
+                <div>
+                    <div class="meeting-title">${meeting.title}</div>
+                    <small class="meeting-date">${formattedDate}</small>
+                </div>
+                ${meeting.required ? '<span class="badge badge-required">Obligatoria</span>' : ''}
+            </div>
+        `;
+    });
+    
+    PerfilApp.elements.upcomingMeetings.innerHTML = html;
+}
+
+function updateUnitInfo() {
+    if (!PerfilApp.elements.unitInfo) return;
+    
+    if (PerfilApp.currentUser.hasUnit) {
+        PerfilApp.elements.unitInfo.innerHTML = `
+            <div class="stat-row">
+                <span class="stat-label">Unidad asignada:</span>
+                <span class="stat-value">A-204</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Estado:</span>
+                <span class="badge badge-success">Activa</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Tipo:</span>
+                <span class="stat-value">2 Dormitorios</span>
+            </div>
+        `;
+    } else {
+        PerfilApp.elements.unitInfo.innerHTML = `
+            <div class="alert alert-info">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <div>
+                    <strong>Sin unidad asignada</strong>
+                    <p style="margin: 4px 0 0 0; fontSize: 14px;">
+                        Una vez aprobado tu pago inicial, se te asignará una unidad habitacional.
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+}
+
 // === FUNCIONES DE TAREAS ===
 
 function showAddTaskDialog() {
+    if (!PerfilApp.currentUser.hasInitialPayment) {
+        alert('Debes completar el pago inicial para agregar tareas');
+        return;
+    }
+    
     const taskText = prompt('Ingresa el texto de la nueva tarea:');
     if (!taskText || !taskText.trim()) return;
     
@@ -318,7 +642,6 @@ function addNewTask(text, category = 'trabajo') {
     
     PerfilApp.mockData.tasks.push(newTask);
     renderTask(newTask);
-    updateTaskCounters();
 }
 
 function renderTask(task) {
@@ -353,7 +676,7 @@ function renderTask(task) {
         taskElement.classList.add('completed');
     }
     
-    // Event listeners para la nueva tarea
+    // Event listeners
     const checkbox = taskElement.querySelector('.task-checkbox');
     const starBtn = taskElement.querySelector('.star-btn');
     const deleteBtn = taskElement.querySelector('.delete-btn');
@@ -363,8 +686,6 @@ function renderTask(task) {
     deleteBtn.addEventListener('click', () => deleteTask(task.id));
     
     taskContainer.appendChild(taskElement);
-    
-    // Animar entrada
     taskElement.classList.add('animate-slideIn');
 }
 
@@ -378,8 +699,6 @@ function toggleTask(taskId) {
     if (taskElement) {
         taskElement.classList.toggle('completed', task.completed);
     }
-    
-    updateTaskCounters();
 }
 
 function toggleFavorite(taskId) {
@@ -398,17 +717,13 @@ function toggleFavorite(taskId) {
         starBtn.classList.remove('favorite');
         svg.setAttribute('fill', 'none');
     }
-    
-    updateTaskCounters();
 }
 
 function deleteTask(taskId) {
     if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
     
-    // Remover de los datos
     PerfilApp.mockData.tasks = PerfilApp.mockData.tasks.filter(t => t.id != taskId);
     
-    // Remover del DOM
     const taskElement = document.querySelector(`[data-id="${taskId}"]`);
     if (taskElement) {
         taskElement.style.animation = 'fadeOut 0.3s ease-out';
@@ -416,20 +731,6 @@ function deleteTask(taskId) {
             taskElement.remove();
         }, 300);
     }
-    
-    updateTaskCounters();
-}
-
-function updateTaskCounters() {
-    const tasks = PerfilApp.mockData.tasks;
-    const totalTasks = tasks.length;
-    const favoriteTasks = tasks.filter(t => t.favorite).length;
-    const casaTasks = tasks.filter(t => t.category === 'casa').length;
-    
-    const badges = PerfilApp.elements.navItemBadges;
-    if (badges[0]) badges[0].textContent = favoriteTasks;
-    if (badges[1]) badges[1].textContent = totalTasks;
-    if (badges[2]) badges[2].textContent = casaTasks;
 }
 
 // === FUNCIONES DE PAGOS ===
@@ -439,7 +740,6 @@ function showUploadForm() {
     PerfilApp.elements.uploadForm.classList.add('animate-fadeIn');
     PerfilApp.state.formsVisible.upload = true;
     
-    // Scroll al formulario
     PerfilApp.elements.uploadForm.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -447,32 +747,27 @@ function hideUploadForm() {
     PerfilApp.elements.uploadForm.style.display = 'none';
     PerfilApp.state.formsVisible.upload = false;
     
-    // Limpiar formulario
     if (PerfilApp.elements.uploadPaymentForm) {
         PerfilApp.elements.uploadPaymentForm.reset();
     }
     
-    // Resetear área de upload
     resetUploadArea();
 }
 
 function handleFileSelect(file) {
     if (!file) return;
     
-    // Validar tipo de archivo
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
         showMessage('paymentMessages', 'Tipo de archivo no válido. Use PDF, JPG o PNG.', 'error');
         return;
     }
     
-    // Validar tamaño (5MB)
     if (file.size > 5 * 1024 * 1024) {
         showMessage('paymentMessages', 'El archivo es demasiado grande. Máximo 5MB.', 'error');
         return;
     }
     
-    // Mostrar información del archivo
     const uploadText = PerfilApp.elements.uploadArea.querySelector('.upload-text');
     if (uploadText) {
         uploadText.textContent = `Archivo seleccionado: ${file.name}`;
@@ -496,28 +791,20 @@ function submitPaymentForm(event) {
     const formData = new FormData(event.target);
     const month = formData.get('payment_month');
     const year = formData.get('payment_year');
-    const amount = formData.get('payment_amount');
     const file = formData.get('payment_file');
     
-    // Validación
-    if (!file || !month || !year || !amount) {
+    if (!file || !month || !year) {
         showMessage('paymentMessages', 'Por favor completa todos los campos requeridos', 'error');
-        return;
-    }
-    
-    if (amount < 1000 || amount > 1000000) {
-        showMessage('paymentMessages', 'El monto debe estar entre $1.000 y $1.000.000', 'error');
         return;
     }
     
     // Simular envío
     setTimeout(() => {
-        // Agregar a datos simulados
         const newPayment = {
             id: Date.now(),
             month: month,
             year: year,
-            amount: parseFloat(amount),
+            amount: 22000,
             status: 'pending',
             date: new Date().toISOString().split('T')[0],
             description: formData.get('payment_description') || ''
@@ -525,11 +812,17 @@ function submitPaymentForm(event) {
         
         PerfilApp.mockData.payments.push(newPayment);
         
-        showMessage('paymentMessages', 'Comprobante subido exitosamente (simulado). Pendiente de aprobación.', 'success');
+        showMessage('paymentMessages', 'Comprobante subido exitosamente. Pendiente de aprobación.', 'success');
         hideUploadForm();
         
-        // Actualizar vista de pagos
         renderPaymentCard(newPayment);
+        
+        // Si es el primer pago y no tiene pago inicial, simular aprobación automática
+        if (!PerfilApp.currentUser.hasInitialPayment && PerfilApp.mockData.payments.length === 1) {
+            setTimeout(() => {
+                approveInitialPayment();
+            }, 2000);
+        }
         
     }, 1000);
 }
@@ -544,9 +837,8 @@ function renderPaymentCard(payment) {
         <div class="payment-info">
             <h3 class="payment-title">Comprobante ${monthNames[parseInt(payment.month)]} ${payment.year}</h3>
             <div class="payment-details">
-                <span class="payment-amount">$${payment.amount.toLocaleString()}</span>
+                <span class="payment-amount">${payment.amount.toLocaleString()}</span>
                 <span class="payment-date">${formatDate(payment.date)}</span>
-                <span class="payment-size">Documento</span>
             </div>
         </div>
         <div class="payment-actions">
@@ -578,14 +870,12 @@ function showHoursForm() {
     PerfilApp.elements.hoursForm.classList.add('animate-fadeIn');
     PerfilApp.state.formsVisible.hours = true;
     
-    // Establecer fecha actual por defecto
     const today = new Date().toISOString().split('T')[0];
     const dateInput = PerfilApp.elements.hoursForm.querySelector('input[name="work_date"]');
     if (dateInput && !dateInput.value) {
         dateInput.value = today;
     }
     
-    // Scroll al formulario
     PerfilApp.elements.hoursForm.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -593,7 +883,6 @@ function hideHoursForm() {
     PerfilApp.elements.hoursForm.style.display = 'none';
     PerfilApp.state.formsVisible.hours = false;
     
-    // Limpiar formulario
     if (PerfilApp.elements.hoursFormElement) {
         PerfilApp.elements.hoursFormElement.reset();
     }
@@ -608,7 +897,6 @@ function submitHoursForm(event) {
     const description = formData.get('description');
     const workType = formData.get('work_type');
     
-    // Validación
     if (!workDate || !hours || !description || !workType) {
         showMessage('hoursMessages', 'Por favor completa todos los campos requeridos', 'error');
         return;
@@ -619,7 +907,6 @@ function submitHoursForm(event) {
         return;
     }
     
-    // Validar que la fecha no sea futura
     const selectedDate = new Date(workDate);
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -629,7 +916,6 @@ function submitHoursForm(event) {
         return;
     }
     
-    // Simular registro
     setTimeout(() => {
         const newHours = {
             id: Date.now(),
@@ -642,32 +928,16 @@ function submitHoursForm(event) {
         
         PerfilApp.mockData.hours.push(newHours);
         
-        showMessage('hoursMessages', 'Horas registradas exitosamente (simulado)', 'success');
+        // Actualizar total de horas
+        PerfilApp.currentUser.totalHoursMonth += parseFloat(hours);
+        
+        showMessage('hoursMessages', 'Horas registradas exitosamente', 'success');
         hideHoursForm();
         
-        // Actualizar resumen de horas
-        updateHoursSummary();
-        
-        // Renderizar nueva entrada
+        updateDashboard();
         renderHoursCard(newHours);
         
     }, 1000);
-}
-
-function updateHoursSummary() {
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    const monthlyHours = PerfilApp.mockData.hours
-        .filter(h => {
-            const hDate = new Date(h.date);
-            return hDate.getMonth() === currentMonth && hDate.getFullYear() === currentYear;
-        })
-        .reduce((total, h) => total + h.hours, 0);
-    
-    if (PerfilApp.elements.totalHoursMonth) {
-        PerfilApp.elements.totalHoursMonth.textContent = `${monthlyHours} horas`;
-    }
 }
 
 function renderHoursCard(hoursData) {
@@ -702,18 +972,84 @@ function renderHoursCard(hoursData) {
 function deleteHours(hoursId) {
     if (!confirm('¿Estás seguro de que quieres eliminar este registro de horas?')) return;
     
-    // Remover de datos
+    const hours = PerfilApp.mockData.hours.find(h => h.id == hoursId);
+    if (hours) {
+        PerfilApp.currentUser.totalHoursMonth -= hours.hours;
+    }
+    
     PerfilApp.mockData.hours = PerfilApp.mockData.hours.filter(h => h.id != hoursId);
     
-    // Remover del DOM
-    const hoursCard = document.querySelector([onclick="deleteHours(${hoursId})"]).closest('.hours-card');
+    const hoursCard = Array.from(document.querySelectorAll('.hours-card')).find(card => 
+        card.querySelector(`button[onclick="deleteHours(${hoursId})"]`)
+    );
+    
     if (hoursCard) {
         hoursCard.style.animation = 'fadeOut 0.3s ease-out';
         setTimeout(() => {
             hoursCard.remove();
-            updateHoursSummary();
+            updateDashboard();
         }, 300);
     }
+}
+
+// === FUNCIONES DE REUNIONES ===
+
+function renderMeetingsList() {
+    if (!PerfilApp.elements.meetingsList) return;
+    
+    const meetings = PerfilApp.mockData.upcomingMeetings;
+    
+    let html = '';
+    
+    meetings.forEach(meeting => {
+        const date = new Date(meeting.date);
+        const formattedDate = date.toLocaleDateString('es-ES', { 
+            day: '2-digit', 
+            month: 'long', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        html += `
+            <div class="meeting-card ${meeting.attended ? 'attended' : ''}">
+                <div class="meeting-card-header">
+                    <h3>${meeting.title}</h3>
+                    ${meeting.required ? '<span class="badge badge-required">Obligatoria</span>' : ''}
+                </div>
+                <p class="meeting-date">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    ${formattedDate}
+                </p>
+                <div class="meeting-actions">
+                    ${meeting.attended 
+                        ? '<span class="badge badge-success">Asistió</span>' 
+                        : `<button class="btn btn-secondary small" onclick="markAttendance(${meeting.id})">Confirmar Asistencia</button>`
+                    }
+                </div>
+            </div>
+        `;
+    });
+    
+    PerfilApp.elements.meetingsList.innerHTML = html;
+}
+
+function markAttendance(meetingId) {
+    const meeting = PerfilApp.mockData.upcomingMeetings.find(m => m.id === meetingId);
+    if (!meeting) return;
+    
+    meeting.attended = true;
+    PerfilApp.currentUser.meetingsAttended++;
+    
+    updateDashboard();
+    renderMeetingsList();
+    
+    showMessage('hoursMessages', 'Asistencia registrada exitosamente', 'success');
 }
 
 // === FUNCIONES DE UTILIDAD ===
@@ -730,16 +1066,20 @@ function showMessage(containerId, message, type = 'info') {
     
     const alertClass = `alert-${type}`;
     
-    // Crear elemento de mensaje
     const messageElement = document.createElement('div');
     messageElement.className = `alert ${alertClass} animate-slideIn`;
-    messageElement.textContent = message;
+    messageElement.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <div>${message}</div>
+    `;
     
-    // Limpiar mensajes anteriores
     container.innerHTML = '';
     container.appendChild(messageElement);
     
-    // Auto-ocultar después de 5 segundos
     setTimeout(() => {
         if (messageElement.parentNode) {
             messageElement.style.animation = 'fadeOut 0.3s ease-out';
@@ -770,46 +1110,24 @@ function formatDateTime(dateString) {
     });
 }
 
-function setCurrentDate() {
-    const now = new Date();
-    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    
-    const currentMonthText = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-    
-    if (PerfilApp.elements.currentMonthDisplay) {
-        PerfilApp.elements.currentMonthDisplay.textContent = currentMonthText;
-    }
-}
-
 function initializeData() {
-    // Inicializar progreso de pago
-    const currentBalance = 15000;
-    const monthlyFee = 22000;
-    const progress = Math.min((currentBalance / monthlyFee) * 100, 100);
-    
-    if (PerfilApp.elements.progressFill) {
-        PerfilApp.elements.progressFill.style.width = progress + '%';
-        PerfilApp.elements.progressFill.setAttribute('data-progress', progress);
-    }
-    
-    if (PerfilApp.elements.progressText) {
-        PerfilApp.elements.progressText.textContent = `${Math.round(progress)}%`;
-    }
-    
-    if (PerfilApp.elements.paymentStatus) {
-        PerfilApp.elements.paymentStatus.textContent = progress >= 100 ? 'Completo' : 'Al día';
-    }
-    
-    // Actualizar contadores
-    updateTaskCounters();
-    updateHoursSummary();
-    
     // Configurar nombre de usuario
     const userNameDisplay = document.getElementById('userNameDisplay');
     if (userNameDisplay) {
         userNameDisplay.textContent = PerfilApp.currentUser.name;
     }
+    
+    // Renderizar tareas iniciales
+    PerfilApp.mockData.tasks.forEach(task => renderTask(task));
+    
+    // Renderizar pagos iniciales
+    PerfilApp.mockData.payments.forEach(payment => renderPaymentCard(payment));
+    
+    // Renderizar horas iniciales
+    PerfilApp.mockData.hours.forEach(hours => renderHoursCard(hours));
+    
+    // Renderizar reuniones
+    renderMeetingsList();
 }
 
 function hideAllForms() {
@@ -818,17 +1136,15 @@ function hideAllForms() {
 }
 
 function handleKeyboardShortcuts(event) {
-    // Solo procesar si no estamos en un input
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
         return;
     }
     
-    // Ctrl/Cmd + tecla
     if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
             case '1':
                 event.preventDefault();
-                showSection('tasks');
+                showSection('dashboard');
                 break;
             case '2':
                 event.preventDefault();
@@ -838,122 +1154,60 @@ function handleKeyboardShortcuts(event) {
                 event.preventDefault();
                 showSection('hours');
                 break;
+            case '4':
+                event.preventDefault();
+                showSection('unit');
+                break;
+            case '5':
+                event.preventDefault();
+                showSection('tasks');
+                break;
         }
     }
     
-    // Escape para cerrar formularios
     if (event.key === 'Escape') {
         hideAllForms();
         closeProfileMenu();
     }
 }
 
-// === FUNCIONES GLOBALES (para uso en HTML) ===
+// === FUNCIONES GLOBALES ===
 
 function logout() {
     if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
-        // Limpiar datos locales
-        PerfilApp.mockData = { tasks: [], payments: [], hours: [] };
-        
-        // Redirigir
+        localStorage.clear();
         window.location.href = 'index.php';
     }
 }
 
-// Hacer funciones disponibles globalmente para eventos onclick en HTML
+function goToAdmin() {
+    window.location.href = 'BACKOFFICE/admin.php';
+}
+
+function openChat() {
+    alert('Función de chat en desarrollo');
+}
+
+// Hacer funciones disponibles globalmente
 window.logout = logout;
+window.goToAdmin = goToAdmin;
+window.openChat = openChat;
 window.viewPayment = viewPayment;
 window.deleteHours = deleteHours;
+window.handleInitialPayment = handleInitialPayment;
+window.approveInitialPayment = approveInitialPayment;
+window.markAttendance = markAttendance;
 
-// === ANIMACIONES CSS ADICIONALES ===
-
-// Agregar estilos de animación dinámicamente
-const additionalStyles = document.createElement('style');
-additionalStyles.textContent = `
-    @keyframes fadeOut {
-        from {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        to {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-    }
-    
-    .animate-fadeOut {
-        animation: fadeOut 0.3s ease-out forwards;
-    }
-    
-    /* Mejoras visuales para estados interactivos */
-    .task-item:hover {
-        transform: translateX(4px);
-    }
-    
-    .payment-card:hover,
-    .hours-card:hover {
-        border-left: 4px solid var(--color-primary);
-    }
-    
-    .summary-card:hover .card-icon {
-        transform: scale(1.1);
-    }
-    
-    .action-button:active {
-        transform: translateY(1px);
-    }
-    
-    /* Estados de carga */
-    .form-container.loading {
-        pointer-events: none;
-        opacity: 0.7;
-    }
-    
-    .form-container.loading::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(255, 255, 255, 0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-`;
-
-document.head.appendChild(additionalStyles);
-
-// === DEBUG Y DESARROLLO ===
+// === DESARROLLO Y DEBUG ===
 
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    // Funciones de debug solo en desarrollo
     window.PerfilApp = PerfilApp;
     
     console.log('🔧 Modo desarrollo activado');
-    console.log('Datos disponibles:', PerfilApp.mockData);
-    console.log('Estado de la app:', PerfilApp.state);
-    
-    // Atajos de teclado para desarrollo
-    document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.shiftKey) {
-            switch (e.key) {
-                case 'D':
-                    e.preventDefault();
-                    console.table(PerfilApp.mockData.tasks);
-                    break;
-                case 'P':
-                    e.preventDefault();
-                    console.table(PerfilApp.mockData.payments);
-                    break;
-                case 'H':
-                    e.preventDefault();
-                    console.table(PerfilApp.mockData.hours);
-                    break;
-            }
-        }
-    });
+    console.log('Comandos disponibles:');
+    console.log('- approveInitialPayment() - Aprobar pago inicial');
+    console.log('- PerfilApp.currentUser - Ver datos del usuario');
+    console.log('- PerfilApp.mockData - Ver datos mock');
 }
 
 console.log('✅ Urban Coop Perfil - Sistema cargado correctamente');

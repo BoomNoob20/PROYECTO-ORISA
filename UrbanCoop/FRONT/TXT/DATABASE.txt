@@ -1,0 +1,417 @@
+-- ========================================
+-- SCRIPT COMPLETO URBAN COOP DATABASE
+-- Versión Mejorada con todas las funcionalidades
+-- Compatible con sistema completo de gestión
+-- ========================================
+
+-- Crear la base de datos si no existe
+CREATE DATABASE IF NOT EXISTS usuarios_urban_coop 
+CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Usar la base de datos
+USE usuarios_urban_coop;
+
+-- ========================================
+-- ELIMINAR TABLAS EXISTENTES (Orden correcto por dependencias)
+-- Descomenta las siguientes líneas solo si necesitas empezar desde cero
+-- ========================================
+-- DROP TABLE IF EXISTS asignaciones_unidades;
+-- DROP TABLE IF EXISTS asistencias_reuniones;
+-- DROP TABLE IF EXISTS solicitudes_unidad;
+-- DROP TABLE IF EXISTS comprobantes_pago;
+-- DROP TABLE IF EXISTS horas_trabajadas;
+-- DROP TABLE IF EXISTS reuniones;
+-- DROP TABLE IF EXISTS unidades_habitacionales;
+-- DROP TABLE IF EXISTS unidades;
+-- DROP TABLE IF EXISTS usuario;
+-- DROP VIEW IF EXISTS vista_pagos_usuario;
+-- DROP VIEW IF EXISTS vista_reuniones_asistencias;
+-- DROP VIEW IF EXISTS vista_usuarios_unidades;
+
+-- ========================================
+-- TABLA PRINCIPAL: USUARIOS
+-- ========================================
+CREATE TABLE IF NOT EXISTS usuario (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    usr_name VARCHAR(100) NOT NULL COMMENT 'Nombre del usuario',
+    usr_surname VARCHAR(100) NOT NULL COMMENT 'Apellido del usuario', 
+    usr_email VARCHAR(100) NOT NULL COMMENT 'Email del usuario',
+    usr_pass VARCHAR(100) NOT NULL COMMENT 'Contraseña encriptada',
+    usr_ci INT(11) NOT NULL COMMENT 'Cédula de identidad',
+    usr_phone INT(11) NOT NULL COMMENT 'Teléfono',
+    is_admin INT(11) NOT NULL DEFAULT 0 COMMENT '0=Usuario normal, 1=Administrador',
+    estado INT(11) NOT NULL DEFAULT 1 COMMENT '1=Pendiente, 2=Aprobado, 3=Rechazado',
+    tiene_pago_inicial TINYINT(1) DEFAULT 0 COMMENT '0=No pagó inicial, 1=Pagó inicial',
+    fecha_pago_inicial DATE DEFAULT NULL COMMENT 'Fecha del pago inicial',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de registro',
+    PRIMARY KEY (id),
+    UNIQUE KEY usr_email (usr_email),
+    UNIQUE KEY usr_ci (usr_ci),
+    INDEX idx_estado (estado),
+    INDEX idx_admin (is_admin),
+    INDEX idx_pago_inicial (tiene_pago_inicial)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Tabla principal de usuarios del sistema Urban Coop';
+
+-- ========================================
+-- TABLA: UNIDADES HABITACIONALES
+-- ========================================
+CREATE TABLE IF NOT EXISTS unidades_habitacionales (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    codigo VARCHAR(20) NOT NULL COMMENT 'Código de la unidad (ej: A-101)',
+    bloque VARCHAR(10) DEFAULT NULL COMMENT 'Bloque o edificio',
+    piso INT(11) DEFAULT NULL COMMENT 'Número de piso',
+    numero INT(11) DEFAULT NULL COMMENT 'Número de unidad',
+    habitaciones INT(11) NOT NULL COMMENT 'Cantidad de habitaciones',
+    baños INT(11) NOT NULL COMMENT 'Cantidad de baños',
+    metros_cuadrados DECIMAL(6,2) DEFAULT NULL COMMENT 'Superficie en m²',
+    estado ENUM('disponible','ocupada','mantenimiento','reservada') DEFAULT 'disponible',
+    user_id INT(11) DEFAULT NULL COMMENT 'Usuario asignado a la unidad',
+    fecha_asignacion DATE DEFAULT NULL COMMENT 'Fecha de asignación',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY codigo (codigo),
+    INDEX idx_estado (estado),
+    INDEX idx_user (user_id),
+    INDEX idx_codigo (codigo),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Unidades habitacionales de la cooperativa';
+
+-- ========================================
+-- TABLA: UNIDADES (Sistema alternativo)
+-- ========================================
+CREATE TABLE IF NOT EXISTS unidades (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    numero_unidad VARCHAR(50) NOT NULL,
+    bloque VARCHAR(50) DEFAULT NULL,
+    piso INT(11) DEFAULT NULL,
+    cuartos INT(11) NOT NULL,
+    banos INT(11) NOT NULL,
+    tamano DECIMAL(8,2) NOT NULL COMMENT 'Tamaño en m2',
+    capacidad INT(11) NOT NULL COMMENT 'Capacidad de personas (2, 4 o 6)',
+    tipo_unidad ENUM('apartamento','casa','local') DEFAULT 'apartamento',
+    estado ENUM('disponible','ocupada','mantenimiento') DEFAULT 'disponible',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY unique_unidad (numero_unidad, bloque),
+    INDEX idx_estado (estado),
+    INDEX idx_capacidad (capacidad)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+COMMENT='Sistema alternativo de gestión de unidades';
+
+-- ========================================
+-- TABLA: SOLICITUDES DE UNIDAD
+-- ========================================
+CREATE TABLE IF NOT EXISTS solicitudes_unidad (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    user_id INT(11) NOT NULL COMMENT 'Usuario que solicita',
+    habitaciones INT(11) NOT NULL COMMENT 'Habitaciones solicitadas',
+    baños INT(11) NOT NULL COMMENT 'Baños solicitados',
+    personas INT(11) NOT NULL COMMENT 'Cantidad de personas',
+    preferencia_bloque VARCHAR(50) DEFAULT NULL COMMENT 'Preferencia de bloque',
+    preferencia_piso VARCHAR(50) DEFAULT NULL COMMENT 'Preferencia de piso',
+    observaciones TEXT DEFAULT NULL COMMENT 'Observaciones adicionales',
+    estado ENUM('pendiente','en_revision','aprobada','rechazada','asignada') DEFAULT 'pendiente',
+    unidad_asignada_id INT(11) DEFAULT NULL COMMENT 'Unidad que se le asignó',
+    fecha_solicitud TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta DATETIME DEFAULT NULL,
+    respuesta_admin TEXT DEFAULT NULL COMMENT 'Respuesta del administrador',
+    PRIMARY KEY (id),
+    INDEX idx_user (user_id),
+    INDEX idx_estado (estado),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE,
+    FOREIGN KEY (unidad_asignada_id) REFERENCES unidades_habitacionales(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Solicitudes de unidades habitacionales';
+
+-- ========================================
+-- TABLA: ASIGNACIONES DE UNIDADES
+-- ========================================
+CREATE TABLE IF NOT EXISTS asignaciones_unidades (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    user_id INT(11) NOT NULL,
+    unidad_id INT(11) NOT NULL,
+    fecha_asignacion DATE NOT NULL,
+    fecha_finalizacion DATE DEFAULT NULL,
+    estado ENUM('activa','finalizada') DEFAULT 'activa',
+    notas TEXT DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_unidad_id (unidad_id),
+    INDEX idx_estado (estado),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE,
+    FOREIGN KEY (unidad_id) REFERENCES unidades(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+COMMENT='Historial de asignaciones de unidades';
+
+-- ========================================
+-- TABLA: HORAS TRABAJADAS
+-- ========================================
+CREATE TABLE IF NOT EXISTS horas_trabajadas (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL COMMENT 'ID del usuario que registró las horas',
+    work_date DATE NOT NULL COMMENT 'Fecha del trabajo realizado',
+    hours_worked DECIMAL(4,2) NOT NULL COMMENT 'Horas trabajadas (con decimales)',
+    description TEXT NOT NULL COMMENT 'Descripción del trabajo realizado',
+    work_type VARCHAR(50) NOT NULL COMMENT 'Tipo de trabajo (Mantenimiento, Limpieza, etc.)',
+    estado ENUM('pendiente','aprobado','rechazado') DEFAULT 'pendiente' COMMENT 'Estado de aprobación',
+    admin_notes TEXT DEFAULT NULL COMMENT 'Notas del administrador',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de creación del registro',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE KEY unique_user_date (user_id, work_date) COMMENT 'Un usuario puede registrar solo una vez por día',
+    INDEX idx_user_id (user_id),
+    INDEX idx_work_date (work_date),
+    INDEX idx_work_type (work_type),
+    INDEX idx_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Registro de horas trabajadas por cada usuario';
+
+-- ========================================
+-- TABLA: COMPROBANTES DE PAGO
+-- ========================================
+CREATE TABLE IF NOT EXISTS comprobantes_pago (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL COMMENT 'ID del usuario que subió el comprobante',
+    payment_month VARCHAR(2) NOT NULL COMMENT 'Mes del pago (01-12)',
+    payment_year VARCHAR(4) NOT NULL COMMENT 'Año del pago',
+    file_name VARCHAR(255) NOT NULL COMMENT 'Nombre original del archivo',
+    file_path VARCHAR(500) NOT NULL COMMENT 'Ruta donde se almacena el archivo',
+    file_size INT NOT NULL COMMENT 'Tamaño del archivo en bytes',
+    file_type VARCHAR(50) NOT NULL COMMENT 'Tipo MIME del archivo',
+    description TEXT COMMENT 'Descripción opcional del comprobante',
+    status ENUM('pendiente', 'aprobado', 'rechazado') DEFAULT 'pendiente' COMMENT 'Estado del comprobante',
+    tipo_pago TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=Pago mensual, 1=Pago atrasado, 2=Indemnización de horas',
+    monto DECIMAL(10,2) DEFAULT NULL COMMENT 'Monto del pago realizado',
+    admin_notes TEXT DEFAULT NULL COMMENT 'Notas del administrador sobre el pago',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de subida',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha de última actualización',
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE KEY unique_user_month_year (user_id, payment_month, payment_year) COMMENT 'Un comprobante por usuario por mes/año',
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status),
+    INDEX idx_payment_date (payment_year, payment_month),
+    INDEX idx_file_type (file_type),
+    INDEX idx_tipo_pago (tipo_pago)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Comprobantes de pago subidos por los usuarios';
+
+-- ========================================
+-- TABLA: REUNIONES
+-- ========================================
+CREATE TABLE IF NOT EXISTS reuniones (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    titulo VARCHAR(200) NOT NULL COMMENT 'Título de la reunión',
+    descripcion TEXT DEFAULT NULL COMMENT 'Descripción de la reunión',
+    fecha_hora DATETIME NOT NULL COMMENT 'Fecha y hora de la reunión',
+    lugar VARCHAR(200) DEFAULT NULL COMMENT 'Lugar donde se realizará',
+    es_obligatoria TINYINT(1) DEFAULT 1 COMMENT '1=Obligatoria, 0=Opcional',
+    estado ENUM('programada','en_curso','finalizada','cancelada') DEFAULT 'programada',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_fecha (fecha_hora),
+    INDEX idx_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Reuniones programadas de la cooperativa';
+
+-- ========================================
+-- TABLA: ASISTENCIAS A REUNIONES
+-- ========================================
+CREATE TABLE IF NOT EXISTS asistencias_reuniones (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    reunion_id INT(11) NOT NULL COMMENT 'ID de la reunión',
+    user_id INT(11) NOT NULL COMMENT 'ID del usuario',
+    asistio TINYINT(1) DEFAULT 0 COMMENT '1=Asistió, 0=No asistió',
+    fecha_confirmacion DATETIME DEFAULT NULL COMMENT 'Fecha de confirmación de asistencia',
+    notas TEXT DEFAULT NULL COMMENT 'Notas sobre la asistencia',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY unique_user_reunion (user_id, reunion_id),
+    INDEX idx_reunion (reunion_id),
+    INDEX idx_user (user_id),
+    FOREIGN KEY (reunion_id) REFERENCES reuniones(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES usuario(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Control de asistencia a reuniones';
+
+-- ========================================
+-- VISTAS PARA REPORTES
+-- ========================================
+
+-- Vista: Resumen de pagos por usuario
+CREATE OR REPLACE VIEW vista_pagos_usuario AS
+SELECT 
+    u.id AS user_id,
+    u.usr_name,
+    u.usr_surname,
+    COUNT(cp.id) AS total_pagos,
+    SUM(CASE WHEN cp.tipo_pago = 0 THEN 1 ELSE 0 END) AS pagos_mensuales,
+    SUM(CASE WHEN cp.tipo_pago = 1 THEN 1 ELSE 0 END) AS pagos_atrasados,
+    SUM(CASE WHEN cp.tipo_pago = 2 THEN 1 ELSE 0 END) AS indemnizaciones,
+    SUM(cp.monto) AS total_monto_pagado,
+    SUM(CASE WHEN cp.status = 'aprobado' THEN cp.monto ELSE 0 END) AS monto_aprobado,
+    SUM(CASE WHEN cp.status = 'pendiente' THEN cp.monto ELSE 0 END) AS monto_pendiente
+FROM usuario u
+LEFT JOIN comprobantes_pago cp ON u.id = cp.user_id
+GROUP BY u.id;
+
+-- Vista: Reuniones con asistencias
+CREATE OR REPLACE VIEW vista_reuniones_asistencias AS
+SELECT 
+    r.id,
+    r.titulo,
+    r.fecha_hora,
+    r.lugar,
+    r.es_obligatoria,
+    r.estado,
+    COUNT(ar.id) AS total_confirmados,
+    SUM(CASE WHEN ar.asistio = 1 THEN 1 ELSE 0 END) AS total_asistieron
+FROM reuniones r
+LEFT JOIN asistencias_reuniones ar ON r.id = ar.reunion_id
+GROUP BY r.id;
+
+-- Vista: Usuarios con sus unidades
+CREATE OR REPLACE VIEW vista_usuarios_unidades AS
+SELECT 
+    u.id AS user_id,
+    u.usr_name,
+    u.usr_surname,
+    u.usr_email,
+    u.estado AS user_estado,
+    u.tiene_pago_inicial,
+    u.fecha_pago_inicial,
+    uh.id AS unidad_id,
+    uh.codigo AS unidad_codigo,
+    uh.habitaciones,
+    uh.baños,
+    uh.metros_cuadrados,
+    uh.fecha_asignacion
+FROM usuario u
+LEFT JOIN unidades_habitacionales uh ON u.id = uh.user_id;
+
+-- ========================================
+-- INSERTAR DATOS DE EJEMPLO
+-- ========================================
+
+-- Usuario administrador
+INSERT INTO usuario (usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado, tiene_pago_inicial, fecha_pago_inicial) 
+VALUES ('Admin', 'Sistema', 'ab@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 12345678, 99999999, 1, 2, 1, '2025-01-01')
+ON DUPLICATE KEY UPDATE 
+    usr_name = VALUES(usr_name),
+    usr_surname = VALUES(usr_surname),
+    is_admin = VALUES(is_admin),
+    estado = VALUES(estado);
+
+-- Usuarios de ejemplo
+INSERT INTO usuario (usr_name, usr_surname, usr_email, usr_pass, usr_ci, usr_phone, is_admin, estado, tiene_pago_inicial) VALUES 
+('Pedro', 'Garfhone', 'pedro@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 24966853, 93658842, 0, 2, 1),
+('María', 'González', 'maria@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 25123456, 94567890, 0, 1, 0),
+('Juan', 'Pérez', 'juan@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 26789012, 95123456, 0, 1, 0),
+('Ana', 'López', 'ana@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 27345678, 96789012, 0, 1, 0),
+('Carlos', 'Rodríguez', 'carlos@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 28901234, 97345678, 0, 1, 0),
+('Laura', 'Martínez', 'laura@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 29567890, 98901234, 0, 1, 0),
+('Diego', 'Fernández', 'diego@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 30123456, 99567890, 0, 1, 0),
+('Sofia', 'Torres', 'sofia@gmail.com', '$2y$10$OonpAzg4gxjR0eNrS6OQl.tLcyajNwu6Da89niX//UMY2jQcf/8Au', 31789012, 91234567, 0, 1, 0)
+ON DUPLICATE KEY UPDATE usr_name = VALUES(usr_name);
+
+-- Unidades habitacionales de ejemplo
+INSERT INTO unidades_habitacionales (codigo, bloque, piso, numero, habitaciones, baños, metros_cuadrados, estado) VALUES
+('A-101', 'A', 1, 101, 2, 1, 65.50, 'disponible'),
+('A-102', 'A', 1, 102, 2, 1, 65.50, 'disponible'),
+('A-201', 'A', 2, 201, 2, 1, 65.50, 'disponible'),
+('A-202', 'A', 2, 202, 3, 2, 85.00, 'disponible'),
+('B-101', 'B', 1, 101, 1, 1, 45.00, 'disponible'),
+('B-102', 'B', 1, 102, 2, 1, 65.50, 'disponible'),
+('B-201', 'B', 2, 201, 3, 2, 85.00, 'disponible'),
+('B-202', 'B', 2, 202, 3, 2, 85.00, 'disponible'),
+('C-101', 'C', 1, 101, 2, 2, 75.00, 'disponible'),
+('C-102', 'C', 1, 102, 3, 2, 90.00, 'disponible')
+ON DUPLICATE KEY UPDATE estado = VALUES(estado);
+
+-- Reuniones de ejemplo
+INSERT INTO reuniones (titulo, descripcion, fecha_hora, lugar, es_obligatoria, estado) VALUES
+('Reunión Mensual Noviembre', 'Reunión mensual obligatoria para todos los cooperativistas', '2025-11-15 19:00:00', 'Salón Principal - Sede Central', 1, 'programada'),
+('Asamblea General Diciembre', 'Asamblea general anual - Votación de proyectos', '2025-12-15 18:00:00', 'Salón de Eventos', 1, 'programada'),
+('Taller de Mantenimiento', 'Taller opcional sobre mantenimiento del hogar', '2025-11-20 16:00:00', 'Sala de Capacitación', 0, 'programada'),
+('Reunión de Comité', 'Reunión del comité directivo', '2025-11-25 19:30:00', 'Oficina Administrativa', 1, 'programada')
+ON DUPLICATE KEY UPDATE titulo = VALUES(titulo);
+
+-- Horas trabajadas de ejemplo
+INSERT INTO horas_trabajadas (user_id, work_date, hours_worked, description, work_type, estado) VALUES 
+(2, '2025-11-01', 6.5, 'Mantenimiento de jardines del área común principal', 'Mantenimiento', 'pendiente'),
+(3, '2025-11-02', 4.0, 'Limpieza profunda del salón de eventos', 'Limpieza', 'pendiente'),
+(4, '2025-11-03', 8.0, 'Reparación de grifería en baños comunes', 'Reparaciones', 'aprobado'),
+(5, '2025-11-04', 5.5, 'Organización de reunión de vecinos', 'Eventos', 'pendiente'),
+(6, '2025-11-05', 7.0, 'Pintura de paredes del hall de entrada', 'Mantenimiento', 'aprobado'),
+(7, '2025-11-06', 3.5, 'Limpieza de escaleras y pasillos', 'Limpieza', 'pendiente')
+ON DUPLICATE KEY UPDATE description = VALUES(description);
+
+-- Comprobantes de pago de ejemplo
+INSERT INTO comprobantes_pago (user_id, payment_month, payment_year, file_name, file_path, file_size, file_type, description, status, tipo_pago, monto) VALUES
+(2, '11', '2025', 'comprobante_noviembre_pedro.pdf', 'uploads/comprobantes/2_11_2025.pdf', 245678, 'application/pdf', 'Comprobante de pago cooperativa noviembre 2025', 'pendiente', 0, 5000.00),
+(3, '11', '2025', 'pago_noviembre_maria.jpg', 'uploads/comprobantes/3_11_2025.jpg', 189432, 'image/jpeg', 'Transferencia bancaria noviembre 2025', 'pendiente', 0, 5000.00),
+(4, '10', '2025', 'octubre_juan.pdf', 'uploads/comprobantes/4_10_2025.pdf', 321098, 'application/pdf', 'Pago octubre 2025', 'aprobado', 0, 5000.00),
+(5, '11', '2025', 'noviembre_ana.png', 'uploads/comprobantes/5_11_2025.png', 156789, 'image/png', 'Captura de transferencia noviembre', 'pendiente', 0, 5000.00)
+ON DUPLICATE KEY UPDATE description = VALUES(description);
+
+-- ========================================
+-- VERIFICACIÓN Y ESTADÍSTICAS
+-- ========================================
+
+SELECT '=== RESUMEN DE LA INSTALACIÓN ===' as info;
+
+-- Contar usuarios por estado
+SELECT 
+    'USUARIOS POR ESTADO' as categoria,
+    CASE estado 
+        WHEN 1 THEN 'Pendientes'
+        WHEN 2 THEN 'Aprobados' 
+        WHEN 3 THEN 'Rechazados'
+    END as estado_desc,
+    COUNT(*) as cantidad
+FROM usuario 
+GROUP BY estado
+ORDER BY estado;
+
+-- Contar comprobantes por estado
+SELECT 
+    'COMPROBANTES POR ESTADO' as categoria,
+    status as estado,
+    COUNT(*) as cantidad
+FROM comprobantes_pago 
+GROUP BY status;
+
+-- Mostrar unidades disponibles
+SELECT 
+    'UNIDADES DISPONIBLES' as categoria,
+    COUNT(*) as cantidad,
+    estado
+FROM unidades_habitacionales
+GROUP BY estado;
+
+-- Mostrar reuniones programadas
+SELECT 
+    'REUNIONES PROGRAMADAS' as categoria,
+    COUNT(*) as cantidad
+FROM reuniones
+WHERE estado = 'programada';
+
+-- Verificar tablas creadas
+SELECT 
+    TABLE_NAME as 'Tabla',
+    TABLE_ROWS as 'Registros',
+    ROUND(((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024), 2) as 'Tamaño_MB',
+    TABLE_COMMENT as 'Descripción'
+FROM information_schema.TABLES 
+WHERE TABLE_SCHEMA = 'usuarios_urban_coop' 
+AND TABLE_TYPE = 'BASE TABLE'
+ORDER BY TABLE_NAME;
+
+SELECT '=== INSTALACIÓN COMPLETADA EXITOSAMENTE ===' as resultado;
+SELECT 'Base de datos Urban Coop configurada con todas las funcionalidades' as mensaje;

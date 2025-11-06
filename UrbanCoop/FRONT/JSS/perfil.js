@@ -1,23 +1,35 @@
-// ===== URBAN COOP - PERFIL JAVASCRIPT MEJORADO =====
+// ===== URBAN COOP - PERFIL JAVASCRIPT CON BASE DE DATOS =====
 // Sistema de gestión cooperativa con pago inicial y dashboard
 
 'use strict';
+
+// === CONFIGURACIÓN DE RUTAS ===
+const API_URL = '../APIS/perfil_api.php';
+
+// Obtener parámetros de la URL
+function getUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        user_id: params.get('user_id') || '',
+        verify: params.get('verify') || ''
+    };
+}
 
 // === VARIABLES GLOBALES ===
 const PerfilApp = {
     // Datos del usuario actual
     currentUser: {
-        id: 1,
-        name: 'Usuario de Prueba',
+        id: 0,
+        name: 'Usuario',
         is_admin: false,
-        hasInitialPayment: false, // Nuevo campo
+        hasInitialPayment: false,
         hasUnit: false,
         monthlyFee: 22000,
-        totalPaid: 15000,
-        approvedPaid: 10000,
+        totalPaid: 0,
+        approvedPaid: 0,
         requiredHours: 20,
-        totalHoursMonth: 12,
-        meetingsAttended: 1,
+        totalHoursMonth: 0,
+        meetingsAttended: 0,
         requiredMeetings: 3
     },
     
@@ -25,6 +37,7 @@ const PerfilApp = {
     state: {
         isUserDataLoaded: false,
         activeSection: 'dashboard',
+        bannerClosed: false,
         formsVisible: {
             upload: false,
             hours: false
@@ -38,28 +51,18 @@ const PerfilApp = {
     // Elementos del DOM
     elements: {},
     
-    // Datos simulados
-    mockData: {
-        tasks: [
-            { id: 1, text: 'Completar registro de horas', category: 'trabajo', completed: false, favorite: false }
-        ],
-        payments: [
-            { id: 1, month: '09', year: '2024', amount: 15000, status: 'pending', date: '2024-09-15' }
-        ],
-        hours: [
-            { id: 1, date: '2024-09-14', hours: 8, type: 'desarrollo', description: 'Desarrollo de nuevas funcionalidades.' }
-        ],
-        upcomingMeetings: [
-            { id: 1, date: '2025-10-15', title: 'Reunión Mensual', required: true, attended: false },
-            { id: 2, date: '2025-10-22', title: 'Asamblea General', required: true, attended: false },
-            { id: 3, date: '2025-10-28', title: 'Reunión de Comité', required: true, attended: false }
-        ]
+    // Datos
+    data: {
+        payments: [],
+        hours: []
     }
 };
 
 // === INICIALIZACIÓN ===
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== URBAN COOP PERFIL INIT ===');
+    console.log('API URL:', API_URL);
+    console.log('Parámetros URL:', getUrlParams());
     
     // Cachear elementos del DOM
     cacheElements();
@@ -82,6 +85,10 @@ function cacheElements() {
         // Modal de pago inicial
         initialPaymentModal: document.getElementById('initialPaymentModal'),
         
+        // Banner y CTA de pago inicial
+        noAccessWarning: document.getElementById('noAccessWarning'),
+        initialPaymentAction: document.getElementById('initialPaymentAction'),
+        
         // Navegación
         navButtons: document.querySelectorAll('.nav-button'),
         navToggles: document.querySelectorAll('.nav-toggle'),
@@ -94,7 +101,6 @@ function cacheElements() {
         sections: document.querySelectorAll('.content-section'),
         
         // Dashboard
-        noAccessWarning: document.getElementById('noAccessWarning'),
         monthlyFee: document.getElementById('monthlyFee'),
         totalPaid: document.getElementById('totalPaid'),
         approvedAmount: document.getElementById('approvedAmount'),
@@ -105,9 +111,6 @@ function cacheElements() {
         requiredHours: document.getElementById('requiredHours'),
         missingHours: document.getElementById('missingHours'),
         hoursProgress: document.getElementById('hoursProgress'),
-        meetingsAttended: document.getElementById('meetingsAttended'),
-        meetingsProgress: document.getElementById('meetingsProgress'),
-        upcomingMeetings: document.getElementById('upcomingMeetings'),
         unitInfo: document.getElementById('unitInfo'),
         
         // Elementos de pagos
@@ -126,14 +129,7 @@ function cacheElements() {
         hoursFormElement: document.getElementById('hoursForm'),
         cancelHours: document.getElementById('cancelHours'),
         hoursList: document.getElementById('hoursList'),
-        hoursMessages: document.getElementById('hoursMessages'),
-        
-        // Elementos de reuniones
-        meetingsList: document.getElementById('meetingsList'),
-        
-        // Elementos de tareas
-        taskList: document.getElementById('taskList'),
-        addTaskBtn: document.getElementById('addTaskBtn')
+        hoursMessages: document.getElementById('hoursMessages')
     };
 }
 
@@ -176,17 +172,19 @@ function setupEventListeners() {
         }
     });
     
-    // Botones de acción
-    if (PerfilApp.elements.addTaskBtn) {
-        PerfilApp.elements.addTaskBtn.addEventListener('click', showAddTaskDialog);
+    // Modal de pago inicial - cerrar al hacer clic en el overlay
+    if (PerfilApp.elements.initialPaymentModal) {
+        PerfilApp.elements.initialPaymentModal.addEventListener('click', (event) => {
+            // Solo cerrar si el clic fue en el overlay, no en el modal
+            if (event.target === PerfilApp.elements.initialPaymentModal) {
+                closeInitialPaymentModal();
+            }
+        });
     }
     
+    // Botones de acción
     if (PerfilApp.elements.uploadPaymentBtn) {
         PerfilApp.elements.uploadPaymentBtn.addEventListener('click', () => {
-            if (!PerfilApp.currentUser.hasInitialPayment) {
-                showMessage('paymentMessages', 'Debes completar el pago inicial antes de subir comprobantes', 'error');
-                return;
-            }
             showUploadForm();
         });
     }
@@ -271,74 +269,271 @@ function setupFileUpload() {
     });
 }
 
-function initializeApp() {
-    // Ocultar pantalla de carga
-    hideLoadingScreen();
-    
-    // Mostrar aplicación principal
-    PerfilApp.elements.mainApp.style.display = 'block';
-    
-    // Verificar si tiene pago inicial
-    checkInitialPayment();
-    
-    // Inicializar datos
-    initializeData();
-    
-    // Actualizar dashboard
-    updateDashboard();
-    
-    // Marcar como cargado
-    PerfilApp.state.isUserDataLoaded = true;
-    
-    console.log('Aplicación inicializada correctamente');
+async function initializeApp() {
+    // Ocultar pantalla de carga después de cargar datos
+    setTimeout(async () => {
+        try {
+            // Cargar datos del usuario
+            await loadUserData();
+            
+            // Verificar pago inicial
+            await checkInitialPayment();
+            
+            // Cargar pagos
+            await loadPayments();
+            
+            // Cargar horas
+            await loadHours();
+            
+            // Actualizar dashboard
+            updateDashboard();
+            
+            console.log('✅ Aplicación inicializada correctamente');
+        } catch (error) {
+            console.error('❌ Error al inicializar:', error);
+        } finally {
+            // Ocultar loading y mostrar app
+            hideLoadingScreen();
+            PerfilApp.elements.mainApp.style.display = 'block';
+            
+            // Marcar como cargado
+            PerfilApp.state.isUserDataLoaded = true;
+        }
+    }, 500);
+}
+
+// === FUNCIONES DE API ===
+
+async function loadUserData() {
+    try {
+        const params = getUrlParams();
+        const url = `${API_URL}?action=get_user_info&user_id=${params.user_id}&verify=${params.verify}`;
+        
+        console.log('📡 Cargando datos de usuario desde:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('📦 Datos recibidos:', data);
+        
+        if (data.success) {
+            PerfilApp.currentUser.id = data.user.id;
+            PerfilApp.currentUser.name = data.user.name;
+            PerfilApp.currentUser.is_admin = data.user.is_admin;
+            PerfilApp.currentUser.hasInitialPayment = data.user.hasInitialPayment;
+            PerfilApp.currentUser.hasUnit = data.user.hasUnit;
+            PerfilApp.currentUser.totalPaid = data.stats.pagos.total_pagado;
+            PerfilApp.currentUser.approvedPaid = data.stats.pagos.aprobado;
+            PerfilApp.currentUser.totalHoursMonth = data.stats.horas.total;
+            
+            // Configurar nombre de usuario
+            const userNameDisplay = document.getElementById('userNameDisplay');
+            if (userNameDisplay) {
+                userNameDisplay.textContent = PerfilApp.currentUser.name;
+            }
+            
+            console.log('✅ Datos de usuario cargados');
+        } else {
+            console.error('❌ Error en respuesta:', data.error);
+        }
+    } catch (error) {
+        console.error('❌ Error cargando datos del usuario:', error);
+    }
+}
+
+async function checkInitialPayment() {
+    try {
+        const params = getUrlParams();
+        const url = `${API_URL}?action=check_initial_payment&user_id=${params.user_id}&verify=${params.verify}`;
+        
+        console.log('📡 Verificando pago inicial desde:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('📦 Estado de pago inicial:', data);
+        
+        if (data.success) {
+            PerfilApp.currentUser.hasInitialPayment = data.has_initial_payment;
+            
+            if (!data.has_initial_payment) {
+                console.log('⚠️ Usuario sin pago inicial');
+                showInitialPaymentModal();
+                showInitialPaymentBanner();
+                showInitialPaymentCTA();
+                disableAllActions();
+            } else {
+                console.log('✅ Usuario con pago inicial aprobado');
+                enableAllActions();
+                hideInitialPaymentBanner();
+                hideInitialPaymentCTA();
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error verificando pago inicial:', error);
+    }
+}
+
+async function loadPayments() {
+    try {
+        const params = getUrlParams();
+        const url = `${API_URL}?action=get_payments&user_id=${params.user_id}&verify=${params.verify}`;
+        
+        console.log('📡 Cargando pagos desde:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('📦 Pagos recibidos:', data);
+        
+        if (data.success) {
+            PerfilApp.data.payments = data.payments;
+            
+            // Limpiar lista
+            if (PerfilApp.elements.paymentsList) {
+                PerfilApp.elements.paymentsList.innerHTML = '';
+            }
+            
+            // Renderizar cada pago
+            data.payments.forEach(payment => {
+                renderPaymentCard(payment);
+            });
+            
+            console.log(`✅ ${data.payments.length} pagos cargados`);
+        }
+    } catch (error) {
+        console.error('❌ Error cargando pagos:', error);
+    }
+}
+
+async function loadHours() {
+    try {
+        const params = getUrlParams();
+        const url = `${API_URL}?action=get_hours&user_id=${params.user_id}&verify=${params.verify}`;
+        
+        console.log('📡 Cargando horas desde:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('📦 Horas recibidas:', data);
+        
+        if (data.success) {
+            PerfilApp.data.hours = data.hours;
+            
+            // Limpiar lista
+            if (PerfilApp.elements.hoursList) {
+                PerfilApp.elements.hoursList.innerHTML = '';
+            }
+            
+            // Renderizar cada registro
+            data.hours.forEach(hours => {
+                renderHoursCard(hours);
+            });
+            
+            console.log(`✅ ${data.hours.length} registros de horas cargados`);
+        }
+    } catch (error) {
+        console.error('❌ Error cargando horas:', error);
+    }
 }
 
 // === FUNCIONES DE PAGO INICIAL ===
 
-function checkInitialPayment() {
-    // Verificar si el usuario tiene pago inicial
-    // En producción, esto vendría de la base de datos
-    const hasInitialPayment = localStorage.getItem('hasInitialPayment') === 'true';
-    
-    PerfilApp.currentUser.hasInitialPayment = hasInitialPayment;
-    
-    if (!hasInitialPayment) {
-        showInitialPaymentModal();
-        disableAllActions();
-    } else {
-        enableAllActions();
-    }
-}
-
 function showInitialPaymentModal() {
     if (PerfilApp.elements.initialPaymentModal) {
         PerfilApp.elements.initialPaymentModal.style.display = 'flex';
+        setTimeout(() => {
+            const modal = PerfilApp.elements.initialPaymentModal.querySelector('.modal');
+            if (modal) {
+                modal.style.animation = 'slideUp 0.3s ease';
+            }
+        }, 10);
     }
-    
-    if (PerfilApp.elements.noAccessWarning) {
+}
+
+function closeInitialPaymentModal() {
+    console.log('🔒 Cerrando modal de pago inicial');
+    if (PerfilApp.elements.initialPaymentModal) {
+        const modal = PerfilApp.elements.initialPaymentModal.querySelector('.modal');
+        if (modal) {
+            modal.style.animation = 'slideDown 0.3s ease';
+        }
+        setTimeout(() => {
+            PerfilApp.elements.initialPaymentModal.style.display = 'none';
+        }, 300);
+    }
+}
+
+function showInitialPaymentBanner() {
+    if (PerfilApp.elements.noAccessWarning && !PerfilApp.state.bannerClosed) {
         PerfilApp.elements.noAccessWarning.style.display = 'flex';
     }
 }
 
-function handleInitialPayment() {
-    // Cerrar modal
-    if (PerfilApp.elements.initialPaymentModal) {
-        PerfilApp.elements.initialPaymentModal.style.display = 'none';
+function hideInitialPaymentBanner() {
+    if (PerfilApp.elements.noAccessWarning) {
+        PerfilApp.elements.noAccessWarning.style.display = 'none';
     }
+}
+
+function showInitialPaymentCTA() {
+    if (PerfilApp.elements.initialPaymentAction) {
+        PerfilApp.elements.initialPaymentAction.style.display = 'block';
+    }
+}
+
+function hideInitialPaymentCTA() {
+    if (PerfilApp.elements.initialPaymentAction) {
+        PerfilApp.elements.initialPaymentAction.style.display = 'none';
+    }
+}
+
+function closeBanner() {
+    PerfilApp.state.bannerClosed = true;
+    const banner = PerfilApp.elements.noAccessWarning;
+    if (banner) {
+        banner.style.animation = 'fadeOut 0.3s ease';
+        setTimeout(() => {
+            banner.style.display = 'none';
+        }, 300);
+    }
+}
+
+function handleInitialPayment() {
+    console.log('🔄 Iniciando proceso de pago inicial');
     
-    // Mostrar formulario de pago
-    showSection('payments');
-    showUploadForm();
+    // Cerrar modal primero
+    closeInitialPaymentModal();
     
-    // Mensaje especial para pago inicial
-    showMessage('paymentMessages', 'Por favor, sube el comprobante de tu pago inicial de $50,000. Una vez aprobado, tendrás acceso completo al sistema.', 'info');
+    // Pequeño delay para que se vea la transición del modal
+    setTimeout(() => {
+        // Cambiar a la sección de pagos
+        showSection('payments');
+        
+        // Otro pequeño delay para mostrar el formulario
+        setTimeout(() => {
+            showUploadForm();
+            
+            // Mensaje especial para pago inicial
+            showMessage('paymentMessages', 
+                '💰 PAGO INICIAL: Sube el comprobante de tu pago inicial de $50,000. Una vez aprobado, tendrás acceso completo al sistema.', 
+                'info'
+            );
+            
+            // Scroll suave al formulario
+            if (PerfilApp.elements.uploadForm) {
+                PerfilApp.elements.uploadForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 300);
+    }, 300);
 }
 
 function disableAllActions() {
-    // Deshabilitar botones
+    // Deshabilitar botones excepto los de pago
     const actionButtons = document.querySelectorAll('.btn-primary');
     actionButtons.forEach(btn => {
-        if (btn.id !== 'uploadPaymentBtn') {
+        if (btn.id !== 'uploadPaymentBtn' && !btn.onclick?.toString().includes('handleInitialPayment')) {
             btn.disabled = true;
             btn.style.opacity = '0.5';
             btn.style.cursor = 'not-allowed';
@@ -351,6 +546,14 @@ function disableAllActions() {
         if (section && section !== 'dashboard' && section !== 'payments') {
             btn.disabled = true;
             btn.style.opacity = '0.5';
+        }
+    });
+    
+    document.querySelectorAll('.nav-subitem').forEach(item => {
+        const section = item.getAttribute('data-section');
+        if (section && section !== 'payments') {
+            item.disabled = true;
+            item.style.opacity = '0.5';
         }
     });
 }
@@ -370,22 +573,10 @@ function enableAllActions() {
         btn.style.opacity = '1';
     });
     
-    // Ocultar advertencia
-    if (PerfilApp.elements.noAccessWarning) {
-        PerfilApp.elements.noAccessWarning.style.display = 'none';
-    }
-}
-
-// Simular aprobación de pago inicial (para pruebas)
-function approveInitialPayment() {
-    localStorage.setItem('hasInitialPayment', 'true');
-    PerfilApp.currentUser.hasInitialPayment = true;
-    PerfilApp.currentUser.hasUnit = true;
-    
-    enableAllActions();
-    updateDashboard();
-    
-    showMessage('paymentMessages', '¡Pago inicial aprobado! Ya puedes acceder a todas las funcionalidades del sistema.', 'success');
+    document.querySelectorAll('.nav-subitem').forEach(item => {
+        item.disabled = false;
+        item.style.opacity = '1';
+    });
 }
 
 // === FUNCIONES DE NAVEGACIÓN ===
@@ -394,7 +585,8 @@ function showSection(sectionName) {
     // Verificar acceso si no tiene pago inicial
     if (!PerfilApp.currentUser.hasInitialPayment) {
         if (sectionName !== 'dashboard' && sectionName !== 'payments') {
-            showMessage('paymentMessages', 'Debes completar el pago inicial para acceder a esta sección', 'error');
+            showMessage('paymentMessages', '⚠️ Debes completar el pago inicial para acceder a esta sección', 'warning');
+            showSection('dashboard');
             return;
         }
     }
@@ -476,14 +668,13 @@ function closeProfileMenu() {
 function updateDashboard() {
     updateFinancialInfo();
     updateHoursInfo();
-    updateMeetingsInfo();
     updateUnitInfo();
 }
 
 function updateFinancialInfo() {
     const { monthlyFee, totalPaid, approvedPaid } = PerfilApp.currentUser;
     const pending = totalPaid - approvedPaid;
-    const remaining = monthlyFee - approvedPaid;
+    const remaining = Math.max(monthlyFee - approvedPaid, 0);
     const progress = Math.min((approvedPaid / monthlyFee) * 100, 100);
     
     if (PerfilApp.elements.monthlyFee) {
@@ -513,7 +704,7 @@ function updateFinancialInfo() {
 
 function updateHoursInfo() {
     const { totalHoursMonth, requiredHours } = PerfilApp.currentUser;
-    const missing = requiredHours - totalHoursMonth;
+    const missing = Math.max(requiredHours - totalHoursMonth, 0);
     const progress = Math.min((totalHoursMonth / requiredHours) * 100, 100);
     
     if (PerfilApp.elements.registeredHours) {
@@ -531,51 +722,6 @@ function updateHoursInfo() {
     if (PerfilApp.elements.hoursProgress) {
         PerfilApp.elements.hoursProgress.style.width = `${progress}%`;
     }
-}
-
-function updateMeetingsInfo() {
-    const { meetingsAttended, requiredMeetings } = PerfilApp.currentUser;
-    const progress = Math.min((meetingsAttended / requiredMeetings) * 100, 100);
-    
-    if (PerfilApp.elements.meetingsAttended) {
-        PerfilApp.elements.meetingsAttended.textContent = `${meetingsAttended} / ${requiredMeetings}`;
-    }
-    
-    if (PerfilApp.elements.meetingsProgress) {
-        PerfilApp.elements.meetingsProgress.style.width = `${progress}%`;
-    }
-    
-    // Renderizar próximas reuniones
-    renderUpcomingMeetings();
-}
-
-function renderUpcomingMeetings() {
-    if (!PerfilApp.elements.upcomingMeetings) return;
-    
-    const meetings = PerfilApp.mockData.upcomingMeetings;
-    
-    let html = '<h4>Próximas Reuniones</h4>';
-    
-    meetings.forEach(meeting => {
-        const date = new Date(meeting.date);
-        const formattedDate = date.toLocaleDateString('es-ES', { 
-            day: '2-digit', 
-            month: 'long', 
-            year: 'numeric' 
-        });
-        
-        html += `
-            <div class="meeting-item">
-                <div>
-                    <div class="meeting-title">${meeting.title}</div>
-                    <small class="meeting-date">${formattedDate}</small>
-                </div>
-                ${meeting.required ? '<span class="badge badge-required">Obligatoria</span>' : ''}
-            </div>
-        `;
-    });
-    
-    PerfilApp.elements.upcomingMeetings.innerHTML = html;
 }
 
 function updateUnitInfo() {
@@ -606,7 +752,7 @@ function updateUnitInfo() {
                 </svg>
                 <div>
                     <strong>Sin unidad asignada</strong>
-                    <p style="margin: 4px 0 0 0; fontSize: 14px;">
+                    <p style="margin: 4px 0 0 0; font-size: 14px;">
                         Una vez aprobado tu pago inicial, se te asignará una unidad habitacional.
                     </p>
                 </div>
@@ -615,137 +761,23 @@ function updateUnitInfo() {
     }
 }
 
-// === FUNCIONES DE TAREAS ===
-
-function showAddTaskDialog() {
-    if (!PerfilApp.currentUser.hasInitialPayment) {
-        alert('Debes completar el pago inicial para agregar tareas');
-        return;
-    }
-    
-    const taskText = prompt('Ingresa el texto de la nueva tarea:');
-    if (!taskText || !taskText.trim()) return;
-    
-    const category = prompt('Selecciona la categoría (trabajo/casa):') || 'trabajo';
-    
-    addNewTask(taskText.trim(), category);
-}
-
-function addNewTask(text, category = 'trabajo') {
-    const newTask = {
-        id: Date.now(),
-        text: text,
-        category: category,
-        completed: false,
-        favorite: false
-    };
-    
-    PerfilApp.mockData.tasks.push(newTask);
-    renderTask(newTask);
-}
-
-function renderTask(task) {
-    const taskContainer = PerfilApp.elements.taskList;
-    const taskElement = document.createElement('div');
-    taskElement.className = 'task-item';
-    taskElement.setAttribute('data-category', task.category);
-    taskElement.setAttribute('data-id', task.id);
-    
-    taskElement.innerHTML = `
-        <div class="task-checkbox-container">
-            <input type="checkbox" class="task-checkbox" id="task-${task.id}" ${task.completed ? 'checked' : ''}>
-            <label for="task-${task.id}" class="checkbox-label"></label>
-        </div>
-        <span class="task-text">${task.text}</span>
-        <div class="task-actions">
-            <button class="task-action-btn star-btn ${task.favorite ? 'favorite' : ''}" title="Marcar como importante">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="${task.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-                    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"></polygon>
-                </svg>
-            </button>
-            <button class="task-action-btn delete-btn" title="Eliminar tarea">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3,6 5,6 21,6"></polyline>
-                    <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
-                </svg>
-            </button>
-        </div>
-    `;
-    
-    if (task.completed) {
-        taskElement.classList.add('completed');
-    }
-    
-    // Event listeners
-    const checkbox = taskElement.querySelector('.task-checkbox');
-    const starBtn = taskElement.querySelector('.star-btn');
-    const deleteBtn = taskElement.querySelector('.delete-btn');
-    
-    checkbox.addEventListener('change', () => toggleTask(task.id));
-    starBtn.addEventListener('click', () => toggleFavorite(task.id));
-    deleteBtn.addEventListener('click', () => deleteTask(task.id));
-    
-    taskContainer.appendChild(taskElement);
-    taskElement.classList.add('animate-slideIn');
-}
-
-function toggleTask(taskId) {
-    const task = PerfilApp.mockData.tasks.find(t => t.id == taskId);
-    if (!task) return;
-    
-    task.completed = !task.completed;
-    
-    const taskElement = document.querySelector(`[data-id="${taskId}"]`);
-    if (taskElement) {
-        taskElement.classList.toggle('completed', task.completed);
-    }
-}
-
-function toggleFavorite(taskId) {
-    const task = PerfilApp.mockData.tasks.find(t => t.id == taskId);
-    if (!task) return;
-    
-    task.favorite = !task.favorite;
-    
-    const starBtn = document.querySelector(`[data-id="${taskId}"] .star-btn`);
-    const svg = starBtn.querySelector('svg');
-    
-    if (task.favorite) {
-        starBtn.classList.add('favorite');
-        svg.setAttribute('fill', 'currentColor');
-    } else {
-        starBtn.classList.remove('favorite');
-        svg.setAttribute('fill', 'none');
-    }
-}
-
-function deleteTask(taskId) {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
-    
-    PerfilApp.mockData.tasks = PerfilApp.mockData.tasks.filter(t => t.id != taskId);
-    
-    const taskElement = document.querySelector(`[data-id="${taskId}"]`);
-    if (taskElement) {
-        taskElement.style.animation = 'fadeOut 0.3s ease-out';
-        setTimeout(() => {
-            taskElement.remove();
-        }, 300);
-    }
-}
-
 // === FUNCIONES DE PAGOS ===
 
 function showUploadForm() {
-    PerfilApp.elements.uploadForm.style.display = 'block';
-    PerfilApp.elements.uploadForm.classList.add('animate-fadeIn');
-    PerfilApp.state.formsVisible.upload = true;
-    
-    PerfilApp.elements.uploadForm.scrollIntoView({ behavior: 'smooth' });
+    if (PerfilApp.elements.uploadForm) {
+        PerfilApp.elements.uploadForm.style.display = 'block';
+        PerfilApp.elements.uploadForm.classList.add('animate-fadeIn');
+        PerfilApp.state.formsVisible.upload = true;
+        
+        PerfilApp.elements.uploadForm.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 function hideUploadForm() {
-    PerfilApp.elements.uploadForm.style.display = 'none';
-    PerfilApp.state.formsVisible.upload = false;
+    if (PerfilApp.elements.uploadForm) {
+        PerfilApp.elements.uploadForm.style.display = 'none';
+        PerfilApp.state.formsVisible.upload = false;
+    }
     
     if (PerfilApp.elements.uploadPaymentForm) {
         PerfilApp.elements.uploadPaymentForm.reset();
@@ -770,14 +802,18 @@ function handleFileSelect(file) {
     
     const uploadText = PerfilApp.elements.uploadArea.querySelector('.upload-text');
     if (uploadText) {
-        uploadText.textContent = `Archivo seleccionado: ${file.name}`;
+        uploadText.textContent = `✓ Archivo seleccionado: ${file.name}`;
+        uploadText.style.color = '#4caf50';
+        uploadText.style.fontWeight = '600';
     }
 }
 
 function resetUploadArea() {
-    const uploadText = PerfilApp.elements.uploadArea.querySelector('.upload-text');
+    const uploadText = PerfilApp.elements.uploadArea?.querySelector('.upload-text');
     if (uploadText) {
         uploadText.textContent = 'Arrastra y suelta tu archivo aquí';
+        uploadText.style.color = '';
+        uploadText.style.fontWeight = '';
     }
     
     if (PerfilApp.elements.paymentFile) {
@@ -785,49 +821,77 @@ function resetUploadArea() {
     }
 }
 
-function submitPaymentForm(event) {
+async function submitPaymentForm(event) {
     event.preventDefault();
+    
+    console.log('📤 Enviando formulario de pago');
     
     const formData = new FormData(event.target);
     const month = formData.get('payment_month');
     const year = formData.get('payment_year');
     const file = formData.get('payment_file');
     
-    if (!file || !month || !year) {
+    console.log('Datos del formulario:', { month, year, fileName: file?.name });
+    
+    if (!file || !file.name || !month || !year) {
         showMessage('paymentMessages', 'Por favor completa todos los campos requeridos', 'error');
         return;
     }
     
-    // Simular envío
-    setTimeout(() => {
-        const newPayment = {
-            id: Date.now(),
-            month: month,
-            year: year,
-            amount: 22000,
-            status: 'pending',
-            date: new Date().toISOString().split('T')[0],
-            description: formData.get('payment_description') || ''
-        };
+    // Agregar acción
+    formData.append('action', 'upload_payment');
+    
+    // Mostrar loading
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 8px;"><div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>Subiendo...</span>';
+    submitBtn.disabled = true;
+    
+    try {
+        const params = getUrlParams();
+        const url = `${API_URL}?user_id=${params.user_id}&verify=${params.verify}`;
         
-        PerfilApp.mockData.payments.push(newPayment);
+        console.log('📡 Enviando a:', url);
         
-        showMessage('paymentMessages', 'Comprobante subido exitosamente. Pendiente de aprobación.', 'success');
-        hideUploadForm();
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
         
-        renderPaymentCard(newPayment);
+        const data = await response.json();console.log('📦 Respuesta del servidor:', data);
         
-        // Si es el primer pago y no tiene pago inicial, simular aprobación automática
-        if (!PerfilApp.currentUser.hasInitialPayment && PerfilApp.mockData.payments.length === 1) {
-            setTimeout(() => {
-                approveInitialPayment();
-            }, 2000);
+        if (data.success) {
+            showMessage('paymentMessages', '✅ ' + data.message, 'success');
+            hideUploadForm();
+            
+            // Recargar pagos
+            await loadPayments();
+            
+            // Si es el primer pago, mostrar mensaje especial
+            if (data.is_initial_payment) {
+                showMessage('paymentMessages', '⏳ Tu pago inicial está siendo procesado. Será revisado por un administrador.', 'info');
+            }
+            
+            // Actualizar datos
+            await loadUserData();
+            await checkInitialPayment();
+            updateDashboard();
+        } else {
+            showMessage('paymentMessages', '❌ ' + data.error, 'error');
         }
-        
-    }, 1000);
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showMessage('paymentMessages', '❌ Error al subir el comprobante. Verifica tu conexión.', 'error');
+    } finally {
+        // Restaurar botón
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
 }
 
 function renderPaymentCard(payment) {
+    if (!PerfilApp.elements.paymentsList) return;
+    
     const monthNames = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     
@@ -835,19 +899,19 @@ function renderPaymentCard(payment) {
     paymentCard.className = 'payment-card animate-slideIn';
     paymentCard.innerHTML = `
         <div class="payment-info">
-            <h3 class="payment-title">Comprobante ${monthNames[parseInt(payment.month)]} ${payment.year}</h3>
+            <h3 class="payment-title">Comprobante ${monthNames[parseInt(payment.payment_month)]} ${payment.payment_year}</h3>
             <div class="payment-details">
-                <span class="payment-amount">${payment.amount.toLocaleString()}</span>
-                <span class="payment-date">${formatDate(payment.date)}</span>
+                <span class="payment-amount">$${(payment.monto || 22000).toLocaleString()}</span>
+                <span class="payment-date">${formatDate(payment.created_at)}</span>
             </div>
+            ${payment.description ? `<p style="margin-top: 8px; font-size: 13px; color: #666;">${payment.description}</p>` : ''}
         </div>
         <div class="payment-actions">
             <span class="payment-status ${payment.status}">${getStatusText(payment.status)}</span>
-            <button class="action-button secondary small" onclick="viewPayment(${payment.id})">Ver</button>
         </div>
     `;
     
-    PerfilApp.elements.paymentsList.insertBefore(paymentCard, PerfilApp.elements.paymentsList.firstChild);
+    PerfilApp.elements.paymentsList.appendChild(paymentCard);
 }
 
 function getStatusText(status) {
@@ -859,43 +923,47 @@ function getStatusText(status) {
     return statusMap[status] || status;
 }
 
-function viewPayment(paymentId) {
-    alert('Función en desarrollo - Ver comprobante #' + paymentId);
-}
-
 // === FUNCIONES DE HORAS ===
 
 function showHoursForm() {
-    PerfilApp.elements.hoursForm.style.display = 'block';
-    PerfilApp.elements.hoursForm.classList.add('animate-fadeIn');
-    PerfilApp.state.formsVisible.hours = true;
-    
-    const today = new Date().toISOString().split('T')[0];
-    const dateInput = PerfilApp.elements.hoursForm.querySelector('input[name="work_date"]');
-    if (dateInput && !dateInput.value) {
-        dateInput.value = today;
+    if (PerfilApp.elements.hoursForm) {
+        PerfilApp.elements.hoursForm.style.display = 'block';
+        PerfilApp.elements.hoursForm.classList.add('animate-fadeIn');
+        PerfilApp.state.formsVisible.hours = true;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = PerfilApp.elements.hoursForm.querySelector('input[name="work_date"]');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = today;
+        }
+        
+        PerfilApp.elements.hoursForm.scrollIntoView({ behavior: 'smooth' });
     }
-    
-    PerfilApp.elements.hoursForm.scrollIntoView({ behavior: 'smooth' });
 }
 
 function hideHoursForm() {
-    PerfilApp.elements.hoursForm.style.display = 'none';
-    PerfilApp.state.formsVisible.hours = false;
+    if (PerfilApp.elements.hoursForm) {
+        PerfilApp.elements.hoursForm.style.display = 'none';
+        PerfilApp.state.formsVisible.hours = false;
+    }
     
     if (PerfilApp.elements.hoursFormElement) {
         PerfilApp.elements.hoursFormElement.reset();
     }
 }
 
-function submitHoursForm(event) {
+async function submitHoursForm(event) {
     event.preventDefault();
+    
+    console.log('📤 Enviando formulario de horas');
     
     const formData = new FormData(event.target);
     const workDate = formData.get('work_date');
     const hours = formData.get('hours_worked');
     const description = formData.get('description');
     const workType = formData.get('work_type');
+    
+    console.log('Datos del formulario:', { workDate, hours, description, workType });
     
     if (!workDate || !hours || !description || !workType) {
         showMessage('hoursMessages', 'Por favor completa todos los campos requeridos', 'error');
@@ -916,31 +984,56 @@ function submitHoursForm(event) {
         return;
     }
     
-    setTimeout(() => {
-        const newHours = {
-            id: Date.now(),
-            date: workDate,
-            hours: parseFloat(hours),
-            type: workType,
-            description: description.trim(),
-            created_at: new Date().toISOString()
-        };
+    // Agregar acción
+    formData.append('action', 'register_hours');
+    
+    // Mostrar loading
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 8px;"><div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>Registrando...</span>';
+    submitBtn.disabled = true;
+    
+    try {
+        const params = getUrlParams();
+        const url = `${API_URL}?user_id=${params.user_id}&verify=${params.verify}`;
         
-        PerfilApp.mockData.hours.push(newHours);
+        console.log('📡 Enviando a:', url);
         
-        // Actualizar total de horas
-        PerfilApp.currentUser.totalHoursMonth += parseFloat(hours);
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
         
-        showMessage('hoursMessages', 'Horas registradas exitosamente', 'success');
-        hideHoursForm();
+        const data = await response.json();
         
-        updateDashboard();
-        renderHoursCard(newHours);
+        console.log('📦 Respuesta del servidor:', data);
         
-    }, 1000);
+        if (data.success) {
+            showMessage('hoursMessages', '✅ ' + data.message, 'success');
+            hideHoursForm();
+            
+            // Recargar horas
+            await loadHours();
+            
+            // Actualizar datos
+            await loadUserData();
+            updateDashboard();
+        } else {
+            showMessage('hoursMessages', '❌ ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showMessage('hoursMessages', '❌ Error al registrar las horas. Verifica tu conexión.', 'error');
+    } finally {
+        // Restaurar botón
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
 }
 
 function renderHoursCard(hoursData) {
+    if (!PerfilApp.elements.hoursList) return;
+    
     const typeLabels = {
         'desarrollo': 'Desarrollo',
         'reunion': 'Reuniones',
@@ -954,10 +1047,11 @@ function renderHoursCard(hoursData) {
     
     const hoursCard = document.createElement('div');
     hoursCard.className = 'hours-card animate-slideIn';
+    hoursCard.setAttribute('data-hours-id', hoursData.id);
     hoursCard.innerHTML = `
         <div class="hours-info">
-            <h3 class="hours-title">${formatDate(hoursData.date)} - ${hoursData.hours} horas</h3>
-            <div class="hours-type">${typeLabels[hoursData.type] || hoursData.type}</div>
+            <h3 class="hours-title">${formatDate(hoursData.work_date)} - ${hoursData.hours_worked} horas</h3>
+            <div class="hours-type">${typeLabels[hoursData.work_type] || hoursData.work_type}</div>
             <p class="hours-description">${hoursData.description}</p>
             <small class="hours-date">Registrado el ${formatDateTime(hoursData.created_at)}</small>
         </div>
@@ -966,97 +1060,65 @@ function renderHoursCard(hoursData) {
         </div>
     `;
     
-    PerfilApp.elements.hoursList.insertBefore(hoursCard, PerfilApp.elements.hoursList.firstChild);
+    PerfilApp.elements.hoursList.appendChild(hoursCard);
 }
 
-function deleteHours(hoursId) {
+async function deleteHours(hoursId) {
     if (!confirm('¿Estás seguro de que quieres eliminar este registro de horas?')) return;
     
-    const hours = PerfilApp.mockData.hours.find(h => h.id == hoursId);
-    if (hours) {
-        PerfilApp.currentUser.totalHoursMonth -= hours.hours;
-    }
+    console.log('🗑️ Eliminando registro de horas:', hoursId);
     
-    PerfilApp.mockData.hours = PerfilApp.mockData.hours.filter(h => h.id != hoursId);
-    
-    const hoursCard = Array.from(document.querySelectorAll('.hours-card')).find(card => 
-        card.querySelector(`button[onclick="deleteHours(${hoursId})"]`)
-    );
-    
-    if (hoursCard) {
-        hoursCard.style.animation = 'fadeOut 0.3s ease-out';
-        setTimeout(() => {
-            hoursCard.remove();
-            updateDashboard();
-        }, 300);
-    }
-}
-
-// === FUNCIONES DE REUNIONES ===
-
-function renderMeetingsList() {
-    if (!PerfilApp.elements.meetingsList) return;
-    
-    const meetings = PerfilApp.mockData.upcomingMeetings;
-    
-    let html = '';
-    
-    meetings.forEach(meeting => {
-        const date = new Date(meeting.date);
-        const formattedDate = date.toLocaleDateString('es-ES', { 
-            day: '2-digit', 
-            month: 'long', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+    try {
+        const formData = new FormData();
+        formData.append('action', 'delete_hours');
+        formData.append('hours_id', hoursId);
+        
+        const params = getUrlParams();
+        const url = `${API_URL}?user_id=${params.user_id}&verify=${params.verify}`;
+        
+        console.log('📡 Enviando a:', url);
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
         });
         
-        html += `
-            <div class="meeting-card ${meeting.attended ? 'attended' : ''}">
-                <div class="meeting-card-header">
-                    <h3>${meeting.title}</h3>
-                    ${meeting.required ? '<span class="badge badge-required">Obligatoria</span>' : ''}
-                </div>
-                <p class="meeting-date">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    ${formattedDate}
-                </p>
-                <div class="meeting-actions">
-                    ${meeting.attended 
-                        ? '<span class="badge badge-success">Asistió</span>' 
-                        : `<button class="btn btn-secondary small" onclick="markAttendance(${meeting.id})">Confirmar Asistencia</button>`
-                    }
-                </div>
-            </div>
-        `;
-    });
-    
-    PerfilApp.elements.meetingsList.innerHTML = html;
-}
-
-function markAttendance(meetingId) {
-    const meeting = PerfilApp.mockData.upcomingMeetings.find(m => m.id === meetingId);
-    if (!meeting) return;
-    
-    meeting.attended = true;
-    PerfilApp.currentUser.meetingsAttended++;
-    
-    updateDashboard();
-    renderMeetingsList();
-    
-    showMessage('hoursMessages', 'Asistencia registrada exitosamente', 'success');
+        const data = await response.json();
+        
+        console.log('📦 Respuesta del servidor:', data);
+        
+        if (data.success) {
+            // Animar y eliminar card
+            const hoursCard = document.querySelector(`[data-hours-id="${hoursId}"]`);
+            if (hoursCard) {
+                hoursCard.style.animation = 'fadeOut 0.3s ease-out';
+                setTimeout(() => {
+                    hoursCard.remove();
+                }, 300);
+            }
+            
+            showMessage('hoursMessages', '✅ Registro eliminado', 'success');
+            
+            // Actualizar datos
+            await loadUserData();
+            updateDashboard();
+        } else {
+            showMessage('hoursMessages', '❌ ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showMessage('hoursMessages', '❌ Error al eliminar el registro', 'error');
+    }
 }
 
 // === FUNCIONES DE UTILIDAD ===
 
 function hideLoadingScreen() {
     if (PerfilApp.elements.loadingScreen) {
-        PerfilApp.elements.loadingScreen.style.display = 'none';
+        PerfilApp.elements.loadingScreen.style.opacity = '0';
+        setTimeout(() => {
+            PerfilApp.elements.loadingScreen.style.display = 'none';
+        }, 300);
     }
 }
 
@@ -1065,14 +1127,18 @@ function showMessage(containerId, message, type = 'info') {
     if (!container) return;
     
     const alertClass = `alert-${type}`;
+    const icons = {
+        'info': '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>',
+        'success': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>',
+        'error': '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>',
+        'warning': '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>'
+    };
     
     const messageElement = document.createElement('div');
     messageElement.className = `alert ${alertClass} animate-slideIn`;
     messageElement.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            ${icons[type] || icons['info']}
         </svg>
         <div>${message}</div>
     `;
@@ -1110,26 +1176,6 @@ function formatDateTime(dateString) {
     });
 }
 
-function initializeData() {
-    // Configurar nombre de usuario
-    const userNameDisplay = document.getElementById('userNameDisplay');
-    if (userNameDisplay) {
-        userNameDisplay.textContent = PerfilApp.currentUser.name;
-    }
-    
-    // Renderizar tareas iniciales
-    PerfilApp.mockData.tasks.forEach(task => renderTask(task));
-    
-    // Renderizar pagos iniciales
-    PerfilApp.mockData.payments.forEach(payment => renderPaymentCard(payment));
-    
-    // Renderizar horas iniciales
-    PerfilApp.mockData.hours.forEach(hours => renderHoursCard(hours));
-    
-    // Renderizar reuniones
-    renderMeetingsList();
-}
-
 function hideAllForms() {
     hideUploadForm();
     hideHoursForm();
@@ -1158,16 +1204,13 @@ function handleKeyboardShortcuts(event) {
                 event.preventDefault();
                 showSection('unit');
                 break;
-            case '5':
-                event.preventDefault();
-                showSection('tasks');
-                break;
         }
     }
     
     if (event.key === 'Escape') {
         hideAllForms();
         closeProfileMenu();
+        closeInitialPaymentModal();
     }
 }
 
@@ -1175,7 +1218,6 @@ function handleKeyboardShortcuts(event) {
 
 function logout() {
     if (confirm('¿Estás seguro que quieres cerrar sesión?')) {
-        localStorage.clear();
         window.location.href = 'index.php';
     }
 }
@@ -1192,11 +1234,10 @@ function openChat() {
 window.logout = logout;
 window.goToAdmin = goToAdmin;
 window.openChat = openChat;
-window.viewPayment = viewPayment;
 window.deleteHours = deleteHours;
 window.handleInitialPayment = handleInitialPayment;
-window.approveInitialPayment = approveInitialPayment;
-window.markAttendance = markAttendance;
+window.closeInitialPaymentModal = closeInitialPaymentModal;
+window.closeBanner = closeBanner;
 
 // === DESARROLLO Y DEBUG ===
 
@@ -1205,9 +1246,9 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
     
     console.log('🔧 Modo desarrollo activado');
     console.log('Comandos disponibles:');
-    console.log('- approveInitialPayment() - Aprobar pago inicial');
     console.log('- PerfilApp.currentUser - Ver datos del usuario');
-    console.log('- PerfilApp.mockData - Ver datos mock');
+    console.log('- PerfilApp.data - Ver datos cargados');
+    console.log('API URL:', API_URL);
 }
 
 console.log('✅ Urban Coop Perfil - Sistema cargado correctamente');

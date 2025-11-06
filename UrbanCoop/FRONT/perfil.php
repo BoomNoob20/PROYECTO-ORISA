@@ -98,26 +98,61 @@ if (is_array($current_user)) {
         </div>
     </div>
 
-    <!-- Modal de Pago Inicial -->
+    <!-- Modal de Pago Inicial MEJORADO -->
     <div id="initialPaymentModal" class="modal-overlay" style="display: none;">
         <div class="modal">
+            <button class="modal-close-btn" onclick="closeInitialPaymentModal()" title="Cerrar">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
             <div class="modal-header">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="12" y1="8" x2="12" y2="12"></line>
                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                 </svg>
-                <h2>Pago Inicial Requerido</h2>
+                <div>
+                    <h2>¡Bienvenido a Urban Coop!</h2>
+                    <p style="color: #666; font-size: 14px; margin-top: 4px;">Pago Inicial Requerido</p>
+                </div>
             </div>
             <div class="modal-content">
-                <p>Para activar tu cuenta y acceder a todas las funcionalidades, debes realizar el pago inicial de ingreso a la cooperativa.</p>
-                <p style="margin-top: 12px; font-weight: 600; font-size: 18px;">Monto: $50,000</p>
-                <p style="margin-top: 8px; font-size: 14px; color: #666;">
-                    Una vez aprobado tu pago, se te asignará una unidad habitacional y podrás comenzar a utilizar el sistema.
+                <div class="alert alert-info" style="margin-bottom: 20px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <div>Para activar tu cuenta y acceder a todas las funcionalidades, debes realizar el pago inicial de ingreso a la cooperativa.</div>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 500; color: #666;">Monto requerido:</span>
+                        <span style="font-size: 28px; font-weight: 700; color: #d32f2f;">$50,000</span>
+                    </div>
+                </div>
+                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                    Una vez aprobado tu pago, se te asignará una unidad habitacional y podrás comenzar a utilizar todas las funciones del sistema:
                 </p>
+                <ul style="margin: 12px 0; padding-left: 20px; color: #666; font-size: 14px;">
+                    <li style="margin: 8px 0;">✓ Registrar horas trabajadas</li>
+                    <li style="margin: 8px 0;">✓ Gestionar pagos mensuales</li>
+                    <li style="margin: 8px 0;">✓ Acceso a tu unidad habitacional</li>
+                    <li style="margin: 8px 0;">✓ Participar en reuniones y eventos</li>
+                </ul>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-primary" onclick="handleInitialPayment()">Subir Comprobante de Pago Inicial</button>
+                <button class="btn btn-primary btn-large" onclick="handleInitialPayment()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Subir Comprobante de Pago Inicial
+                </button>
+                <button class="btn btn-secondary" onclick="closeInitialPaymentModal()">Cerrar</button>
             </div>
         </div>
     </div>
@@ -232,14 +267,49 @@ if (is_array($current_user)) {
                 <div id="dashboard-section" class="content-section active">
                     <h1 class="page-title">Dashboard</h1>
                     
-                    <div id="noAccessWarning" class="alert alert-warning" style="display: none;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <!-- Banner de advertencia MEJORADO con botón de cierre -->
+                    <div id="noAccessWarning" class="alert alert-warning banner-closeable" style="display: none;">
+                        <button class="banner-close-btn" onclick="closeBanner()" title="Cerrar">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <line x1="12" y1="8" x2="12" y2="12"></line>
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
-                        <div>
-                            <strong>Acción requerida:</strong> Debes realizar el pago inicial para acceder a todas las funcionalidades.
+                        <div style="flex: 1;">
+                            <strong>⚠️ Acción requerida: Pago Inicial Pendiente</strong>
+                            <p style="margin: 8px 0 0 0; font-size: 14px;">
+                                Debes realizar el pago inicial de <strong>$50,000</strong> para acceder a todas las funcionalidades del sistema.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Botón destacado para pago inicial -->
+                    <div id="initialPaymentAction" class="initial-payment-cta" style="display: none;">
+                        <div class="cta-content">
+                            <div class="cta-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                                </svg>
+                            </div>
+                            <div class="cta-text">
+                                <h3>¡Completa tu Pago Inicial!</h3>
+                                <p>Realiza el pago de ingreso de <strong>$50,000</strong> para activar tu cuenta y acceder a todos los servicios.</p>
+                            </div>
+                            <button class="btn btn-primary btn-large" onclick="handleInitialPayment()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                Subir Comprobante Ahora
+                            </button>
                         </div>
                     </div>
 

@@ -17,21 +17,13 @@
             <nav>
                 <ul class="nav-menu">
                     <li><a href="#Inicio">Inicio</a></li>
-                    <li><a href="#Novedades">Novedades</a></li>
-                    <li><a href="#testimonios">Clientes</a></li>
+                    <li><a href="#coopretativas">Cooperativas</a></li>
                     <li><a href="#footer-content">Contacto</a></li>
                 </ul>
                 <button class="menu-toggle" id="menuToggle"> ≡ </button>
             </nav>
             <div class="nav-controls">
-                <button class="dark-mode-toggle" id="darkModeToggle">
-                    <svg id="lightIcon" viewBox="0 0 24 24">
-                        <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
-                    </svg>
-                    <svg id="darkIcon" viewBox="0 0 24 24" style="display: none;">
-                        <path d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z"/>
-                    </svg>
-                </button>
+
                 <a href="loginLP.php" class="login-btn">Iniciar Sesión</a>
             </div>
         </div>
@@ -49,8 +41,8 @@
     </section>
 
     <!-- Cooperativas Section -->
-    <section class="cooperativas">
-        <div class="container">
+    <section id="coopretativas" class="cooperativas">
+        <div class="container" >
             <div class="coop-grid">
                 <div class="coop-card">
                     <div class="coop-icon">🏗️</div>
@@ -83,7 +75,7 @@
             <div class="footer-content">
                 <div class="footer-section">
                     <div class="footer-logo">
-                        <img src="IMG/UrbanCoop Black.jpeg" alt="" class="footer-logo-image">
+                        <img src="IMG/descarga.png" alt="" class="footer-logo-image">
                     </div>
                     <p>Facilitamos el acceso a la vivienda a través del sistema cooperativo, promoviendo la solidaridad y el desarrollo comunitario.</p>
                     <p>Tu hogar, nuestra misión.</p>
@@ -109,9 +101,9 @@
                 
                 <div class="footer-section">
                     <h3>Contacto</h3>
-                    <p>📍 Av. 18 de Julio 1234, Montevideo</p>
-                    <p>📞 (+598) 2901-1234</p>
-                    <p>✉️ info@urbancoop.com.uy</p>
+                    <p>📍 Andrés Gómez 1770, Montevideo</p>
+                    <p>📞 (+598) 091 742 784</p>
+                    <p>✉️ ...</p>
                     <p>🕒 Lunes a Viernes: 9:00 - 17:00</p>
                 </div>
             </div>

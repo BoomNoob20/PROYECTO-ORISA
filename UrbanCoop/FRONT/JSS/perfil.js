@@ -1,5 +1,5 @@
-// ===== URBAN COOP - PERFIL JAVASCRIPT CON BASE DE DATOS =====
-// Sistema de gestión cooperativa con pago inicial y dashboard
+// ===== URBAN COOP - PERFIL JAVASCRIPT =====
+// Sistema de gestión cooperativa simplificado
 
 'use strict';
 
@@ -9,10 +9,26 @@ const API_URL = '../APIS/perfil_api.php';
 // Obtener parámetros de la URL
 function getUrlParams() {
     const params = new URLSearchParams(window.location.search);
+    const userId = params.get('user_id') || '';
+    const verify = params.get('verify') || '';
+    
+    // Debug
+    console.log('📋 Parámetros extraídos de URL:', {
+        user_id: userId,
+        verify: verify,
+        url: window.location.search
+    });
+    
     return {
-        user_id: params.get('user_id') || '',
-        verify: params.get('verify') || ''
+        user_id: userId,
+        verify: verify
     };
+}
+
+// === FUNCIÓN HELPER PARA CONSTRUIR URLs CON PARÁMETROS ===
+function buildApiUrl(action) {
+    const params = getUrlParams();
+    return `${API_URL}?action=${action}&user_id=${params.user_id}&verify=${params.verify}`;
 }
 
 // === VARIABLES GLOBALES ===
@@ -37,10 +53,10 @@ const PerfilApp = {
     state: {
         isUserDataLoaded: false,
         activeSection: 'dashboard',
-        bannerClosed: false,
         formsVisible: {
             upload: false,
-            hours: false
+            hours: false,
+            initialPayment: false
         },
         expandedMenus: {
             payments: false,
@@ -64,6 +80,14 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('API URL:', API_URL);
     console.log('Parámetros URL:', getUrlParams());
     
+    // Validar que tenemos los parámetros necesarios
+    const params = getUrlParams();
+    if (!params.user_id || !params.verify) {
+        alert('Error: Faltan parámetros de autenticación en la URL');
+        console.error('❌ Faltan parámetros user_id o verify');
+        return;
+    }
+    
     // Cachear elementos del DOM
     cacheElements();
     
@@ -81,13 +105,6 @@ function cacheElements() {
         // Pantalla de carga
         loadingScreen: document.getElementById('loadingScreen'),
         mainApp: document.getElementById('mainApp'),
-        
-        // Modal de pago inicial
-        initialPaymentModal: document.getElementById('initialPaymentModal'),
-        
-        // Banner y CTA de pago inicial
-        noAccessWarning: document.getElementById('noAccessWarning'),
-        initialPaymentAction: document.getElementById('initialPaymentAction'),
         
         // Navegación
         navButtons: document.querySelectorAll('.nav-button'),
@@ -113,7 +130,16 @@ function cacheElements() {
         hoursProgress: document.getElementById('hoursProgress'),
         unitInfo: document.getElementById('unitInfo'),
         
-        // Elementos de pagos
+        // Pago inicial
+        initialPaymentStatus: document.getElementById('initialPaymentStatus'),
+        initialPaymentForm: document.getElementById('initial-payment-form'),
+        uploadInitialPaymentForm: document.getElementById('uploadInitialPaymentForm'),
+        cancelInitialUpload: document.getElementById('cancelInitialUpload'),
+        uploadInitialArea: document.getElementById('uploadInitialArea'),
+        initialPaymentFile: document.getElementById('initial_payment_file'),
+        initialPaymentMessages: document.getElementById('initialPaymentMessages'),
+        
+        // Elementos de pagos mensuales
         uploadPaymentBtn: document.getElementById('uploadPaymentBtn'),
         uploadForm: document.getElementById('upload-form'),
         uploadPaymentForm: document.getElementById('uploadPaymentForm'),
@@ -172,29 +198,21 @@ function setupEventListeners() {
         }
     });
     
-    // Modal de pago inicial - cerrar al hacer clic en el overlay
-    if (PerfilApp.elements.initialPaymentModal) {
-        PerfilApp.elements.initialPaymentModal.addEventListener('click', (event) => {
-            // Solo cerrar si el clic fue en el overlay, no en el modal
-            if (event.target === PerfilApp.elements.initialPaymentModal) {
-                closeInitialPaymentModal();
-            }
-        });
-    }
-    
-    // Botones de acción
+    // Botones de acción - Pagos mensuales
     if (PerfilApp.elements.uploadPaymentBtn) {
         PerfilApp.elements.uploadPaymentBtn.addEventListener('click', () => {
             showUploadForm();
         });
     }
     
+    // Botones de acción - Pago inicial
+    if (PerfilApp.elements.cancelInitialUpload) {
+        PerfilApp.elements.cancelInitialUpload.addEventListener('click', hideInitialPaymentForm);
+    }
+    
+    // Botones de acción - Horas
     if (PerfilApp.elements.addHoursBtn) {
         PerfilApp.elements.addHoursBtn.addEventListener('click', () => {
-            if (!PerfilApp.currentUser.hasInitialPayment) {
-                showMessage('hoursMessages', 'Debes completar el pago inicial antes de registrar horas', 'error');
-                return;
-            }
             showHoursForm();
         });
     }
@@ -210,7 +228,12 @@ function setupEventListeners() {
 }
 
 function setupFormEventListeners() {
-    // Formulario de pagos
+    // Formulario de pago inicial
+    if (PerfilApp.elements.uploadInitialPaymentForm) {
+        PerfilApp.elements.uploadInitialPaymentForm.addEventListener('submit', submitInitialPaymentForm);
+    }
+    
+    // Formulario de pagos mensuales
     if (PerfilApp.elements.uploadPaymentForm) {
         PerfilApp.elements.uploadPaymentForm.addEventListener('submit', submitPaymentForm);
     }
@@ -230,47 +253,80 @@ function setupFormEventListeners() {
 }
 
 function setupFileUpload() {
-    if (!PerfilApp.elements.uploadArea) return;
-    
-    const uploadArea = PerfilApp.elements.uploadArea;
-    const fileInput = PerfilApp.elements.paymentFile;
-    
-    // Click para abrir selector de archivos
-    uploadArea.addEventListener('click', (e) => {
-        if (e.target === fileInput) return;
-        fileInput.click();
-    });
-    
-    // Cambio de archivo
-    fileInput.addEventListener('change', (e) => {
-        handleFileSelect(e.target.files[0]);
-    });
-    
-    // Drag & Drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
-    
-    uploadArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-    });
-    
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
+    // Upload area para pagos mensuales
+    if (PerfilApp.elements.uploadArea) {
+        const uploadArea = PerfilApp.elements.uploadArea;
+        const fileInput = PerfilApp.elements.paymentFile;
         
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            fileInput.files = files;
-            handleFileSelect(files[0]);
-        }
-    });
+        uploadArea.addEventListener('click', (e) => {
+            if (e.target === fileInput) return;
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0], 'monthly');
+        });
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(files[0], 'monthly');
+            }
+        });
+    }
+    
+    // Upload area para pago inicial
+    if (PerfilApp.elements.uploadInitialArea) {
+        const uploadArea = PerfilApp.elements.uploadInitialArea;
+        const fileInput = PerfilApp.elements.initialPaymentFile;
+        
+        uploadArea.addEventListener('click', (e) => {
+            if (e.target === fileInput) return;
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0], 'initial');
+        });
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(files[0], 'initial');
+            }
+        });
+    }
 }
 
 async function initializeApp() {
-    // Ocultar pantalla de carga después de cargar datos
     setTimeout(async () => {
         try {
             // Cargar datos del usuario
@@ -288,15 +344,15 @@ async function initializeApp() {
             // Actualizar dashboard
             updateDashboard();
             
+            // Actualizar sección de pago inicial
+            updateInitialPaymentSection();
+            
             console.log('✅ Aplicación inicializada correctamente');
         } catch (error) {
             console.error('❌ Error al inicializar:', error);
         } finally {
-            // Ocultar loading y mostrar app
             hideLoadingScreen();
             PerfilApp.elements.mainApp.style.display = 'block';
-            
-            // Marcar como cargado
             PerfilApp.state.isUserDataLoaded = true;
         }
     }, 500);
@@ -306,8 +362,7 @@ async function initializeApp() {
 
 async function loadUserData() {
     try {
-        const params = getUrlParams();
-        const url = `${API_URL}?action=get_user_info&user_id=${params.user_id}&verify=${params.verify}`;
+        const url = buildApiUrl('get_user_info');
         
         console.log('📡 Cargando datos de usuario desde:', url);
         
@@ -335,16 +390,17 @@ async function loadUserData() {
             console.log('✅ Datos de usuario cargados');
         } else {
             console.error('❌ Error en respuesta:', data.error);
+            alert('Error: ' + data.error);
         }
     } catch (error) {
         console.error('❌ Error cargando datos del usuario:', error);
+        alert('Error de conexión al cargar datos del usuario');
     }
 }
 
 async function checkInitialPayment() {
     try {
-        const params = getUrlParams();
-        const url = `${API_URL}?action=check_initial_payment&user_id=${params.user_id}&verify=${params.verify}`;
+        const url = buildApiUrl('check_initial_payment');
         
         console.log('📡 Verificando pago inicial desde:', url);
         
@@ -356,17 +412,10 @@ async function checkInitialPayment() {
         if (data.success) {
             PerfilApp.currentUser.hasInitialPayment = data.has_initial_payment;
             
-            if (!data.has_initial_payment) {
-                console.log('⚠️ Usuario sin pago inicial');
-                showInitialPaymentModal();
-                showInitialPaymentBanner();
-                showInitialPaymentCTA();
-                disableAllActions();
-            } else {
+            if (data.has_initial_payment) {
                 console.log('✅ Usuario con pago inicial aprobado');
-                enableAllActions();
-                hideInitialPaymentBanner();
-                hideInitialPaymentCTA();
+            } else {
+                console.log('⚠️ Usuario sin pago inicial aprobado');
             }
         }
     } catch (error) {
@@ -376,8 +425,7 @@ async function checkInitialPayment() {
 
 async function loadPayments() {
     try {
-        const params = getUrlParams();
-        const url = `${API_URL}?action=get_payments&user_id=${params.user_id}&verify=${params.verify}`;
+        const url = buildApiUrl('get_payments');
         
         console.log('📡 Cargando pagos desde:', url);
         
@@ -408,8 +456,7 @@ async function loadPayments() {
 
 async function loadHours() {
     try {
-        const params = getUrlParams();
-        const url = `${API_URL}?action=get_hours&user_id=${params.user_id}&verify=${params.verify}`;
+        const url = buildApiUrl('get_hours');
         
         console.log('📡 Cargando horas desde:', url);
         
@@ -440,157 +487,156 @@ async function loadHours() {
 
 // === FUNCIONES DE PAGO INICIAL ===
 
-function showInitialPaymentModal() {
-    if (PerfilApp.elements.initialPaymentModal) {
-        PerfilApp.elements.initialPaymentModal.style.display = 'flex';
-        setTimeout(() => {
-            const modal = PerfilApp.elements.initialPaymentModal.querySelector('.modal');
-            if (modal) {
-                modal.style.animation = 'slideUp 0.3s ease';
-            }
-        }, 10);
-    }
-}
-
-function closeInitialPaymentModal() {
-    console.log('🔒 Cerrando modal de pago inicial');
-    if (PerfilApp.elements.initialPaymentModal) {
-        const modal = PerfilApp.elements.initialPaymentModal.querySelector('.modal');
-        if (modal) {
-            modal.style.animation = 'slideDown 0.3s ease';
-        }
-        setTimeout(() => {
-            PerfilApp.elements.initialPaymentModal.style.display = 'none';
-        }, 300);
-    }
-}
-
-function showInitialPaymentBanner() {
-    if (PerfilApp.elements.noAccessWarning && !PerfilApp.state.bannerClosed) {
-        PerfilApp.elements.noAccessWarning.style.display = 'flex';
-    }
-}
-
-function hideInitialPaymentBanner() {
-    if (PerfilApp.elements.noAccessWarning) {
-        PerfilApp.elements.noAccessWarning.style.display = 'none';
-    }
-}
-
-function showInitialPaymentCTA() {
-    if (PerfilApp.elements.initialPaymentAction) {
-        PerfilApp.elements.initialPaymentAction.style.display = 'block';
-    }
-}
-
-function hideInitialPaymentCTA() {
-    if (PerfilApp.elements.initialPaymentAction) {
-        PerfilApp.elements.initialPaymentAction.style.display = 'none';
-    }
-}
-
-function closeBanner() {
-    PerfilApp.state.bannerClosed = true;
-    const banner = PerfilApp.elements.noAccessWarning;
-    if (banner) {
-        banner.style.animation = 'fadeOut 0.3s ease';
-        setTimeout(() => {
-            banner.style.display = 'none';
-        }, 300);
-    }
-}
-
-function handleInitialPayment() {
-    console.log('🔄 Iniciando proceso de pago inicial');
+function updateInitialPaymentSection() {
+    if (!PerfilApp.elements.initialPaymentStatus) return;
     
-    // Cerrar modal primero
-    closeInitialPaymentModal();
-    
-    // Pequeño delay para que se vea la transición del modal
-    setTimeout(() => {
-        // Cambiar a la sección de pagos
-        showSection('payments');
+    if (PerfilApp.currentUser.hasInitialPayment) {
+        // Usuario ya tiene pago inicial aprobado
+        PerfilApp.elements.initialPaymentStatus.innerHTML = `
+            <div class="alert alert-success">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <div>
+                    <strong>✅ Ya has realizado el pago inicial</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 14px;">
+                        Tu pago inicial ha sido aprobado. Ya tienes acceso completo a todas las funcionalidades del sistema.
+                    </p>
+                </div>
+            </div>
+        `;
         
-        // Otro pequeño delay para mostrar el formulario
-        setTimeout(() => {
-            showUploadForm();
-            
-            // Mensaje especial para pago inicial
-            showMessage('paymentMessages', 
-                '💰 PAGO INICIAL: Sube el comprobante de tu pago inicial de $50,000. Una vez aprobado, tendrás acceso completo al sistema.', 
-                'info'
-            );
-            
-            // Scroll suave al formulario
-            if (PerfilApp.elements.uploadForm) {
-                PerfilApp.elements.uploadForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }, 300);
-    }, 300);
+        // Ocultar formulario si está visible
+        if (PerfilApp.elements.initialPaymentForm) {
+            PerfilApp.elements.initialPaymentForm.style.display = 'none';
+        }
+    } else {
+        // Usuario no tiene pago inicial
+        PerfilApp.elements.initialPaymentStatus.innerHTML = `
+            <div class="alert alert-info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <div>
+                    <strong>💰 Pago Inicial Requerido</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 14px;">
+                        Para activar completamente tu cuenta y acceder a una unidad habitacional, debes realizar el pago inicial de ingreso a la cooperativa.
+                    </p>
+                </div>
+            </div>
+            <div style="background: #f8f9fa; padding: 24px; border-radius: 12px; margin: 24px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <span style="font-weight: 500; color: #666;">Monto del pago inicial:</span>
+                    <span style="font-size: 32px; font-weight: 700; color: #d32f2f;">$50,000</span>
+                </div>
+                <button class="btn btn-primary btn-large" onclick="showInitialPaymentForm()" style="width: 100%;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Subir Comprobante de Pago Inicial
+                </button>
+            </div>
+        `;
+    }
 }
 
-function disableAllActions() {
-    // Deshabilitar botones excepto los de pago
-    const actionButtons = document.querySelectorAll('.btn-primary');
-    actionButtons.forEach(btn => {
-        if (btn.id !== 'uploadPaymentBtn' && !btn.onclick?.toString().includes('handleInitialPayment')) {
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-            btn.style.cursor = 'not-allowed';
-        }
-    });
-    
-    // Deshabilitar navegación excepto dashboard y pagos
-    PerfilApp.elements.navButtons.forEach(btn => {
-        const section = btn.getAttribute('data-section');
-        if (section && section !== 'dashboard' && section !== 'payments') {
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-        }
-    });
-    
-    document.querySelectorAll('.nav-subitem').forEach(item => {
-        const section = item.getAttribute('data-section');
-        if (section && section !== 'payments') {
-            item.disabled = true;
-            item.style.opacity = '0.5';
-        }
-    });
+function showInitialPaymentForm() {
+    if (PerfilApp.elements.initialPaymentForm) {
+        PerfilApp.elements.initialPaymentForm.style.display = 'block';
+        PerfilApp.elements.initialPaymentForm.classList.add('animate-fadeIn');
+        PerfilApp.state.formsVisible.initialPayment = true;
+        
+        PerfilApp.elements.initialPaymentForm.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
-function enableAllActions() {
-    // Habilitar botones
-    const actionButtons = document.querySelectorAll('.btn-primary');
-    actionButtons.forEach(btn => {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-    });
+function hideInitialPaymentForm() {
+    if (PerfilApp.elements.initialPaymentForm) {
+        PerfilApp.elements.initialPaymentForm.style.display = 'none';
+        PerfilApp.state.formsVisible.initialPayment = false;
+    }
     
-    // Habilitar navegación
-    PerfilApp.elements.navButtons.forEach(btn => {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-    });
+    if (PerfilApp.elements.uploadInitialPaymentForm) {
+        PerfilApp.elements.uploadInitialPaymentForm.reset();
+    }
     
-    document.querySelectorAll('.nav-subitem').forEach(item => {
-        item.disabled = false;
-        item.style.opacity = '1';
-    });
+    resetUploadArea('initial');
+}
+
+async function submitInitialPaymentForm(event) {
+    event.preventDefault();
+    
+    console.log('📤 Enviando formulario de pago inicial');
+    
+    const formData = new FormData(event.target);
+    const month = formData.get('payment_month');
+    const year = formData.get('payment_year');
+    const file = formData.get('payment_file');
+    
+    console.log('Datos del formulario:', { month, year, fileName: file?.name });
+    
+    if (!file || !file.name || !month || !year) {
+        showMessage('initialPaymentMessages', 'Por favor completa todos los campos requeridos', 'error');
+        return;
+    }
+    
+    // CRÍTICO: Agregar user_id y verify a FormData
+    const params = getUrlParams();
+    formData.append('user_id', params.user_id);
+    formData.append('verify', params.verify);
+    formData.append('action', 'upload_payment');
+    
+    // Mostrar loading
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 8px;"><div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>Subiendo...</span>';
+    submitBtn.disabled = true;
+    
+    try {
+        const url = `${API_URL}`;
+        
+        console.log('📡 Enviando a:', url);
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        console.log('📦 Respuesta del servidor:', data);
+        
+        if (data.success) {
+            showMessage('initialPaymentMessages', '✅ ' + data.message + ' Tu pago será revisado por un administrador.', 'success');
+            hideInitialPaymentForm();
+            
+            // Recargar datos
+            await loadUserData();
+            await checkInitialPayment();
+            await loadPayments();
+            updateDashboard();
+            updateInitialPaymentSection();
+        } else {
+            showMessage('initialPaymentMessages', '❌ ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showMessage('initialPaymentMessages', '❌ Error al subir el comprobante. Verifica tu conexión.', 'error');
+    } finally {
+        // Restaurar botón
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
 }
 
 // === FUNCIONES DE NAVEGACIÓN ===
 
 function showSection(sectionName) {
-    // Verificar acceso si no tiene pago inicial
-    if (!PerfilApp.currentUser.hasInitialPayment) {
-        if (sectionName !== 'dashboard' && sectionName !== 'payments') {
-            showMessage('paymentMessages', '⚠️ Debes completar el pago inicial para acceder a esta sección', 'warning');
-            showSection('dashboard');
-            return;
-        }
-    }
-    
     // Ocultar todas las secciones
     PerfilApp.elements.sections.forEach(section => {
         section.classList.remove('active');
@@ -761,7 +807,7 @@ function updateUnitInfo() {
     }
 }
 
-// === FUNCIONES DE PAGOS ===
+// === FUNCIONES DE PAGOS MENSUALES ===
 
 function showUploadForm() {
     if (PerfilApp.elements.uploadForm) {
@@ -783,24 +829,27 @@ function hideUploadForm() {
         PerfilApp.elements.uploadPaymentForm.reset();
     }
     
-    resetUploadArea();
+    resetUploadArea('monthly');
 }
 
-function handleFileSelect(file) {
+function handleFileSelect(file, type = 'monthly') {
     if (!file) return;
     
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
-        showMessage('paymentMessages', 'Tipo de archivo no válido. Use PDF, JPG o PNG.', 'error');
+        const msgContainer = type === 'initial' ? 'initialPaymentMessages' : 'paymentMessages';
+        showMessage(msgContainer, 'Tipo de archivo no válido. Use PDF, JPG o PNG.', 'error');
         return;
     }
     
     if (file.size > 5 * 1024 * 1024) {
-        showMessage('paymentMessages', 'El archivo es demasiado grande. Máximo 5MB.', 'error');
+        const msgContainer = type === 'initial' ? 'initialPaymentMessages' : 'paymentMessages';
+        showMessage(msgContainer, 'El archivo es demasiado grande. Máximo 5MB.', 'error');
         return;
     }
     
-    const uploadText = PerfilApp.elements.uploadArea.querySelector('.upload-text');
+    const uploadArea = type === 'initial' ? PerfilApp.elements.uploadInitialArea : PerfilApp.elements.uploadArea;
+    const uploadText = uploadArea?.querySelector('.upload-text');
     if (uploadText) {
         uploadText.textContent = `✓ Archivo seleccionado: ${file.name}`;
         uploadText.style.color = '#4caf50';
@@ -808,23 +857,25 @@ function handleFileSelect(file) {
     }
 }
 
-function resetUploadArea() {
-    const uploadText = PerfilApp.elements.uploadArea?.querySelector('.upload-text');
+function resetUploadArea(type = 'monthly') {
+    const uploadArea = type === 'initial' ? PerfilApp.elements.uploadInitialArea : PerfilApp.elements.uploadArea;
+    const uploadText = uploadArea?.querySelector('.upload-text');
     if (uploadText) {
         uploadText.textContent = 'Arrastra y suelta tu archivo aquí';
         uploadText.style.color = '';
         uploadText.style.fontWeight = '';
     }
     
-    if (PerfilApp.elements.paymentFile) {
-        PerfilApp.elements.paymentFile.value = '';
+    const fileInput = type === 'initial' ? PerfilApp.elements.initialPaymentFile : PerfilApp.elements.paymentFile;
+    if (fileInput) {
+        fileInput.value = '';
     }
 }
 
 async function submitPaymentForm(event) {
     event.preventDefault();
     
-    console.log('📤 Enviando formulario de pago');
+    console.log('📤 Enviando formulario de pago mensual');
     
     const formData = new FormData(event.target);
     const month = formData.get('payment_month');
@@ -838,7 +889,10 @@ async function submitPaymentForm(event) {
         return;
     }
     
-    // Agregar acción
+    // CRÍTICO: Agregar user_id y verify a FormData
+    const params = getUrlParams();
+    formData.append('user_id', params.user_id);
+    formData.append('verify', params.verify);
     formData.append('action', 'upload_payment');
     
     // Mostrar loading
@@ -848,8 +902,7 @@ async function submitPaymentForm(event) {
     submitBtn.disabled = true;
     
     try {
-        const params = getUrlParams();
-        const url = `${API_URL}?user_id=${params.user_id}&verify=${params.verify}`;
+        const url = `${API_URL}`;
         
         console.log('📡 Enviando a:', url);
         
@@ -858,7 +911,9 @@ async function submitPaymentForm(event) {
             body: formData
         });
         
-        const data = await response.json();console.log('📦 Respuesta del servidor:', data);
+        const data = await response.json();
+        
+        console.log('📦 Respuesta del servidor:', data);
         
         if (data.success) {
             showMessage('paymentMessages', '✅ ' + data.message, 'success');
@@ -866,11 +921,6 @@ async function submitPaymentForm(event) {
             
             // Recargar pagos
             await loadPayments();
-            
-            // Si es el primer pago, mostrar mensaje especial
-            if (data.is_initial_payment) {
-                showMessage('paymentMessages', '⏳ Tu pago inicial está siendo procesado. Será revisado por un administrador.', 'info');
-            }
             
             // Actualizar datos
             await loadUserData();
@@ -901,7 +951,7 @@ function renderPaymentCard(payment) {
         <div class="payment-info">
             <h3 class="payment-title">Comprobante ${monthNames[parseInt(payment.payment_month)]} ${payment.payment_year}</h3>
             <div class="payment-details">
-                <span class="payment-amount">$${(payment.monto || 22000).toLocaleString()}</span>
+                <span class="payment-amount">${(payment.monto || 22000).toLocaleString()}</span>
                 <span class="payment-date">${formatDate(payment.created_at)}</span>
             </div>
             ${payment.description ? `<p style="margin-top: 8px; font-size: 13px; color: #666;">${payment.description}</p>` : ''}
@@ -984,7 +1034,10 @@ async function submitHoursForm(event) {
         return;
     }
     
-    // Agregar acción
+    // CRÍTICO: Agregar user_id y verify a FormData
+    const params = getUrlParams();
+    formData.append('user_id', params.user_id);
+    formData.append('verify', params.verify);
     formData.append('action', 'register_hours');
     
     // Mostrar loading
@@ -994,8 +1047,7 @@ async function submitHoursForm(event) {
     submitBtn.disabled = true;
     
     try {
-        const params = getUrlParams();
-        const url = `${API_URL}?user_id=${params.user_id}&verify=${params.verify}`;
+        const url = `${API_URL}`;
         
         console.log('📡 Enviando a:', url);
         
@@ -1073,8 +1125,12 @@ async function deleteHours(hoursId) {
         formData.append('action', 'delete_hours');
         formData.append('hours_id', hoursId);
         
+        // CRÍTICO: Agregar user_id y verify a FormData
         const params = getUrlParams();
-        const url = `${API_URL}?user_id=${params.user_id}&verify=${params.verify}`;
+        formData.append('user_id', params.user_id);
+        formData.append('verify', params.verify);
+        
+        const url = `${API_URL}`;
         
         console.log('📡 Enviando a:', url);
         
@@ -1179,6 +1235,7 @@ function formatDateTime(dateString) {
 function hideAllForms() {
     hideUploadForm();
     hideHoursForm();
+    hideInitialPaymentForm();
 }
 
 function handleKeyboardShortcuts(event) {
@@ -1210,7 +1267,6 @@ function handleKeyboardShortcuts(event) {
     if (event.key === 'Escape') {
         hideAllForms();
         closeProfileMenu();
-        closeInitialPaymentModal();
     }
 }
 
@@ -1235,9 +1291,7 @@ window.logout = logout;
 window.goToAdmin = goToAdmin;
 window.openChat = openChat;
 window.deleteHours = deleteHours;
-window.handleInitialPayment = handleInitialPayment;
-window.closeInitialPaymentModal = closeInitialPaymentModal;
-window.closeBanner = closeBanner;
+window.showInitialPaymentForm = showInitialPaymentForm;
 
 // === DESARROLLO Y DEBUG ===
 

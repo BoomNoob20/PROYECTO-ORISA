@@ -1,5 +1,5 @@
 <?php
-// perfil.php - Versión mejorada con dashboard y pago inicial
+// perfil.php - Versión simplificada sin bloqueo de pago inicial
 
 session_start();
 
@@ -98,65 +98,6 @@ if (is_array($current_user)) {
         </div>
     </div>
 
-    <!-- Modal de Pago Inicial MEJORADO -->
-    <div id="initialPaymentModal" class="modal-overlay" style="display: none;">
-        <div class="modal">
-            <button class="modal-close-btn" onclick="closeInitialPaymentModal()" title="Cerrar">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
-            <div class="modal-header">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                </svg>
-                <div>
-                    <h2>¡Bienvenido a Urban Coop!</h2>
-                    <p style="color: #666; font-size: 14px; margin-top: 4px;">Pago Inicial Requerido</p>
-                </div>
-            </div>
-            <div class="modal-content">
-                <div class="alert alert-info" style="margin-bottom: 20px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                    </svg>
-                    <div>Para activar tu cuenta y acceder a todas las funcionalidades, debes realizar el pago inicial de ingreso a la cooperativa.</div>
-                </div>
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight: 500; color: #666;">Monto requerido:</span>
-                        <span style="font-size: 28px; font-weight: 700; color: #d32f2f;">$50,000</span>
-                    </div>
-                </div>
-                <p style="font-size: 14px; color: #666; line-height: 1.6;">
-                    Una vez aprobado tu pago, se te asignará una unidad habitacional y podrás comenzar a utilizar todas las funciones del sistema:
-                </p>
-                <ul style="margin: 12px 0; padding-left: 20px; color: #666; font-size: 14px;">
-                    <li style="margin: 8px 0;">✓ Registrar horas trabajadas</li>
-                    <li style="margin: 8px 0;">✓ Gestionar pagos mensuales</li>
-                    <li style="margin: 8px 0;">✓ Acceso a tu unidad habitacional</li>
-                    <li style="margin: 8px 0;">✓ Participar en reuniones y eventos</li>
-                </ul>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-primary btn-large" onclick="handleInitialPayment()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    Subir Comprobante de Pago Inicial
-                </button>
-                <button class="btn btn-secondary" onclick="closeInitialPaymentModal()">Cerrar</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Estado de espera o rechazo -->
     <div id="accessDeniedScreen" style="display: none; align-items: center; justify-content: center; height: 100vh; text-align: center;">
         <div style="background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
@@ -220,7 +161,8 @@ if (is_array($current_user)) {
                             </svg>
                         </button>
                         <div class="nav-submenu" id="payments-submenu">
-                            <button class="nav-subitem" data-section="payments">Comprobantes</button>
+                            <button class="nav-subitem" data-section="initial-payment">Pago Inicial</button>
+                            <button class="nav-subitem" data-section="payments">Comprobantes Mensuales</button>
                             <button class="nav-subitem" data-section="remuneration">Remuneración de Horas</button>
                         </div>
                     </div>
@@ -266,52 +208,6 @@ if (is_array($current_user)) {
                 <!-- Dashboard Section -->
                 <div id="dashboard-section" class="content-section active">
                     <h1 class="page-title">Dashboard</h1>
-                    
-                    <!-- Banner de advertencia MEJORADO con botón de cierre -->
-                    <div id="noAccessWarning" class="alert alert-warning banner-closeable" style="display: none;">
-                        <button class="banner-close-btn" onclick="closeBanner()" title="Cerrar">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                        <div style="flex: 1;">
-                            <strong>⚠️ Acción requerida: Pago Inicial Pendiente</strong>
-                            <p style="margin: 8px 0 0 0; font-size: 14px;">
-                                Debes realizar el pago inicial de <strong>$50,000</strong> para acceder a todas las funcionalidades del sistema.
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Botón destacado para pago inicial -->
-                    <div id="initialPaymentAction" class="initial-payment-cta" style="display: none;">
-                        <div class="cta-content">
-                            <div class="cta-icon">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="12" y1="8" x2="12" y2="16"></line>
-                                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                                </svg>
-                            </div>
-                            <div class="cta-text">
-                                <h3>¡Completa tu Pago Inicial!</h3>
-                                <p>Realiza el pago de ingreso de <strong>$50,000</strong> para activar tu cuenta y acceder a todos los servicios.</p>
-                            </div>
-                            <button class="btn btn-primary btn-large" onclick="handleInitialPayment()">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
-                                Subir Comprobante Ahora
-                            </button>
-                        </div>
-                    </div>
 
                     <div class="dashboard-grid">
                         <!-- Estado Financiero -->
@@ -430,9 +326,78 @@ if (is_array($current_user)) {
                     </div>
                 </div>
 
-                <!-- Pagos Section -->
+                <!-- Pago Inicial Section -->
+                <div id="initial-payment-section" class="content-section">
+                    <h1 class="page-title">Pago Inicial</h1>
+                    
+                    <div id="initialPaymentStatus">
+                        <!-- Se llena dinámicamente con el estado del pago inicial -->
+                    </div>
+
+                    <div id="initialPaymentMessages"></div>
+
+                    <div id="initial-payment-form" style="display: none;">
+                        <div class="form-container">
+                            <form id="uploadInitialPaymentForm" enctype="multipart/form-data">
+                                <input type="hidden" name="user_id" id="uploadUserId">
+                                
+                                <div class="upload-area" id="uploadInitialArea">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    <p class="upload-text">Arrastra y suelta tu archivo aquí</p>
+                                    <p style="font-size: 12px; color: #666; margin-top: 5px;">PDF, JPG, PNG - Máximo 5MB</p>
+                                    <input type="file" name="payment_file" id="initial_payment_file" accept=".pdf,.jpg,.jpeg,.png" required>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Mes de Pago *</label>
+                                        <select name="payment_month" id="initial_payment_month" required>
+                                            <option value="">Seleccionar mes</option>
+                                            <option value="01">Enero</option>
+                                            <option value="02">Febrero</option>
+                                            <option value="03">Marzo</option>
+                                            <option value="04">Abril</option>
+                                            <option value="05">Mayo</option>
+                                            <option value="06">Junio</option>
+                                            <option value="07">Julio</option>
+                                            <option value="08">Agosto</option>
+                                            <option value="09">Septiembre</option>
+                                            <option value="10">Octubre</option>
+                                            <option value="11">Noviembre</option>
+                                            <option value="12">Diciembre</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Año *</label>
+                                        <select name="payment_year" id="initial_payment_year" required>
+                                            <option value="">Seleccionar año</option>
+                                            <option value="2024">2024</option>
+                                            <option value="2025">2025</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Descripción (opcional)</label>
+                                    <textarea name="payment_description" id="initial_payment_description" rows="3" placeholder="Pago inicial de ingreso a la cooperativa..."></textarea>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Subir Comprobante</button>
+                                    <button type="button" class="btn btn-secondary" id="cancelInitialUpload">Cancelar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pagos Mensuales Section -->
                 <div id="payments-section" class="content-section">
-                    <h1 class="page-title">Comprobantes de Pago</h1>
+                    <h1 class="page-title">Comprobantes de Pago Mensuales</h1>
                     <button class="btn btn-primary" id="uploadPaymentBtn">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

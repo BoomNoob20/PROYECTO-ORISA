@@ -1,0 +1,16 @@
+[10-Nov-2025 02:32:40 Europe/Berlin] === NUEVA PETICIÓN === Acción: get_user_info | Método: GET
+[10-Nov-2025 02:32:40 Europe/Berlin] Validando sesión - User ID: 0, Token: 
+[10-Nov-2025 02:32:40 Europe/Berlin] Faltan parámetros - User ID: 0, Token length: 0
+[10-Nov-2025 02:32:40 Europe/Berlin] Usuario autenticado ID: 0
+[10-Nov-2025 02:32:40 Europe/Berlin] === NUEVA PETICIÓN === Acción: check_initial_payment | Método: GET
+[10-Nov-2025 02:32:40 Europe/Berlin] Validando sesión - User ID: 0, Token: 
+[10-Nov-2025 02:32:40 Europe/Berlin] Faltan parámetros - User ID: 0, Token length: 0
+[10-Nov-2025 02:32:40 Europe/Berlin] Sesión no válida para acción: check_initial_payment
+[10-Nov-2025 02:32:40 Europe/Berlin] === NUEVA PETICIÓN === Acción: get_payments | Método: GET
+[10-Nov-2025 02:32:40 Europe/Berlin] Validando sesión - User ID: 0, Token: 
+[10-Nov-2025 02:32:40 Europe/Berlin] Faltan parámetros - User ID: 0, Token length: 0
+[10-Nov-2025 02:32:40 Europe/Berlin] Sesión no válida para acción: get_payments
+[10-Nov-2025 02:32:40 Europe/Berlin] === NUEVA PETICIÓN === Acción: get_hours | Método: GET
+[10-Nov-2025 02:32:40 Europe/Berlin] Validando sesión - User ID: 0, Token: 
+[10-Nov-2025 02:32:40 Europe/Berlin] Faltan parámetros - User ID: 0, Token length: 0
+[10-Nov-2025 02:32:40 Europe/Berlin] Sesión no válida para acción: get_hours
